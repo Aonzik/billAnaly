@@ -51,6 +51,9 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 - **行内无感编辑 (Inline Edit)**：表格单元格单击即改，失焦即存，内置账户代号与名称智能清洗。
 - **系统级另存为导出 Excel**：采用现代浏览器的 `File System Access API`（`showSaveFilePicker`），弹出操作系统原生文件保存弹窗，支持自定义文件夹路径与文件名；自动降级兼容传统浏览器。
 
+### 🛠️ 架构与工程化特性
+- **零配置开箱即用（Auto-Init DB）**：基于 FastAPI `lifespan` 机制内置数据库自检。服务首次启动时，若检测到缺失 `bills.db`，会自动无感创建数据库文件、数据表结构及核心检索索引，无需手动执行 SQL 或额外初始化脚本。
+
 ---
 
 ## 2. 技术栈与运行环境 (Tech Stack & Prerequisites)
@@ -136,7 +139,7 @@ billAnaly/
 ├── analyze.py                # 核心财务核算引擎 (聚合统计、垫付冲抵、商户排行榜)
 ├── ai_assistant.py           # AI 模块 (动态热加载配置、财务体检、深度精读、账单问答)
 ├── db_manager.py             # 数据库 CRUD 路由与 Excel 导出接口
-├── bills.db                  # SQLite 核心账单数据库
+├── bills.db                  # SQLite 核心账单数据库(首次启动由服务自动检测并创建)
 ├── static/                   # 前端静态资源
 │   ├── dashboard.html        # 财务分析大屏页面 (含 dataZoom 时间聚焦组件)
 │   ├── dashboard.js          # 大屏数据拉取、ECharts 走势图与聚焦、AI 交互与预算联动
@@ -303,6 +306,9 @@ ai_tasks:
 ### Q5: 修改了静态资源（如 JS/CSS）后刷新网页没有变化？
 
 * **解决办法**：浏览器对本地静态资源有强缓存，请使用 **`Ctrl + F5`**（macOS 上为 `Cmd + Shift + R`）强制刷新网页。
+
+### Q6: 首次部署时没有 `bills.db` 数据库文件怎么处理？
+- **解答**：无需任何操作。系统在启动阶段会自动探测 `bills.db` 是否存在，若缺失会自动完成建库、建表（`expenses`）及建立相关查询索引（日期、分类、类型）。
 
 ---
 
