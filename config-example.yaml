@@ -1,0 +1,16 @@
+# DeepSeek 大模型配置
+deepseek:
+  api_key: "your-api-key" # 替换为你的真实 Key
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-flash"
+
+# 商户复购榜中需要剔除的账户代码、支付通道或非真实商户名称
+non_merchants:
+  - HB          # 花呗
+  - VX          # 微信
+  - AL          # 支付宝
+  - BK          # 银行卡
+  - TC          # 交通卡
+  - 微信
+  - 支付宝
+

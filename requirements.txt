@@ -1,0 +1,8 @@
+pyyaml
+numpy
+pandas
+matplotlib
+fastapi
+pydantic
+uvicorn
+openai
