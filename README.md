@@ -122,14 +122,6 @@ python server.py
 
 ```
 
-
-
-
-📌 访问入口：
-
-* 📈 **财务分析大屏 (Dashboard)**: `http://127.0.0.1:8000/dashboard.html`
-* 📑 **流水数据管理后台 (Manager)**: `http://127.0.0.1:8000/manager.html`
-
 **📌 访问入口**：
 * **本地访问**：
   * 📈 **财务分析大屏 (Dashboard)**: `http://127.0.0.1:8000/dashboard.html`
