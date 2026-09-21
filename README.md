@@ -54,6 +54,9 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 ### 🛠️ 架构与工程化特性
 - **零配置开箱即用（Auto-Init DB）**：基于 FastAPI `lifespan` 机制内置数据库自检。服务首次启动时，若检测到缺失 `bills.db`，会自动无感创建数据库文件、数据表结构及核心检索索引，无需手动执行 SQL 或额外初始化脚本。
 
+### 🌐 随时随地多端管理与远程协同
+- **即插即用的远程访问支持**：系统服务默认监听本地/局域网端口，轻量无状态。配合 **虚拟内网 / 异地组网**（如 Tailscale、WireGuard、ZeroTier）或 **内网穿透工具**（如 Cloudflare Tunnel、frp、cpolar），无需公网 IP 即可在手机端浏览器、平板或异地电脑随时随地记账、核账与查阅 AI 报表。
+
 ---
 
 ## 2. 技术栈与运行环境 (Tech Stack & Prerequisites)
@@ -76,7 +79,7 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 
 ### 第一步：克隆仓库与准备虚拟环境
 ```bash
-git clone [https://github.com/komuro-kaede/billAnaly.git](https://github.com/komuro-kaede/billAnaly.git)
+git clone https://github.com/komuro-kaede/billAnaly.git
 cd billAnaly
 
 # 创建 Python 3.12.6 虚拟环境
@@ -100,17 +103,13 @@ pip install -r requirements.txt
 
 ### 第三步：配置应用参数
 
-在项目根目录检查并编辑 `config.yaml`（完整字段见[配置说明](https://www.google.com/search?q=%25235-%25E9%2585%258D%25E7%25BD%25AE%25E8%25AF%25B4%25E6%2598%258E-configuration&utm_source=gemini)）：
+在项目根目录检查并编辑 `config.yaml`：
 
 ```yaml
 deepseek:
-  api_key: "sk-your-deepseek-api-key" # 填入你的 DeepSeek API Key
-  base_url: "[https://api.deepseek.com](https://api.deepseek.com)"
+  api_key: "your-deepseek-api-key" # 填入你的 DeepSeek API Key
+  base_url: "https://api.deepseek.com"
   model: "deepseek-flash"
-
-# 默认月度总预算基准 (元)
-budget:
-  monthly_budget: 2800.0
 
 ```
 
@@ -123,10 +122,21 @@ python server.py
 
 ```
 
-启动成功后，在浏览器中访问：
 
-* 📈 **财务分析大屏 (Dashboard)**: `http://127.0.0.1:8000/static/dashboard.html`
-* 📑 **流水数据管理后台 (Manager)**: `http://127.0.0.1:8000/static/manager.html`
+
+
+📌 访问入口：
+
+* 📈 **财务分析大屏 (Dashboard)**: `http://127.0.0.1:8000/dashboard.html`
+* 📑 **流水数据管理后台 (Manager)**: `http://127.0.0.1:8000/manager.html`
+
+**📌 访问入口**：
+* **本地访问**：
+  * 📈 **财务分析大屏 (Dashboard)**: `http://127.0.0.1:8000/dashboard.html`
+  * 📑 **流水数据管理后台 (Manager)**: `http://127.0.0.1:8000/manager.html`
+* **远程 / 移动端访问**：
+  1. **局域网同一 Wi-Fi**：直接通过主机内网 IP 访问（如 `http://192.168.x.x:8000/dashboard.html`）。
+  2. **异地远程访问**：通过 **Tailscale / WireGuard** 虚拟内网直接直连，或使用 **Cloudflare Tunnel / frp / cpolar** 进行内网穿透映射，实现外出时手机随时打开网页快速记账。
 
 ---
 
