@@ -13,7 +13,55 @@
     <!-- 顶部综合指标看板 -->
     <div class="header">
         <h2>📊 月度个人财务与消费行为看板</h2>
-        <div class="stat-grid" id="kpi-cards"></div>
+        <div class="stat-grid" id="kpi-cards">
+            <!-- 1：月度总支出 -->
+            <div class="metric-card">
+                <div class="metric-title">
+                    <span>月度总支出</span>
+                    <span class="sub-tag">EX + AR - AP</span>
+                </div>
+                <div class="metric-value" id="card-total-expense" style="color: #dc2626;">¥0.00</div>
+                <div class="metric-hint" id="card-expense-hint">含垫付冲抵后真实支出</div>
+            </div>
+            <!-- 2：月度资产净增长 -->
+            <div class="metric-card">
+                <div class="metric-title">
+                    <span>月度资产净增长</span>
+                    <span class="sub-tag">IN - 支出</span>
+                </div>
+                <div class="metric-value" id="card-net-growth">¥0.00</div>
+                <div class="metric-hint" id="card-growth-hint">当月资金净结余</div>
+            </div>
+            <!-- 3：待收回垫付 -->
+            <div class="metric-card">
+                <div class="metric-title">
+                    <span>待收回垫付</span>
+                    <span class="sub-tag">AR - AP</span>
+                </div>
+                <div class="metric-value" id="card-pending-recovery" style="color: #2563eb;">¥0.00</div>
+                <div class="metric-hint" id="card-recovery-hint">尚未回款的外借/代付</div>
+            </div>
+            <!-- 4：下月待还花呗 -->
+            <div class="metric-card">
+                <div class="metric-title"><span>下月待还花呗</span></div>
+                <div class="metric-value" id="card-hb-need-pay" style="color: #e67e22;">¥0.00</div>
+            </div>
+            <!-- 5：建议今日起可用日均 -->
+            <div class="metric-card">
+                <div class="metric-title"><span>建议今日起可用日均</span></div>
+                <div class="metric-value" id="card-dynamic-budget" style="color: #27ae60;">¥0.0/天</div>
+            </div>
+            <!-- 6：基准安全日均 -->
+            <div class="metric-card">
+                <div class="metric-title"><span>基准安全日均</span></div>
+                <div class="metric-value" id="card-baseline-budget">¥0.0/天</div>
+            </div>
+            <!-- 7：拿铁因子 -->
+            <div class="metric-card">
+                <div class="metric-title"><span>拿铁因子（饮食*累计）</span></div>
+                <div class="metric-value" id="card-latte-cost" style="color: #c0392b;">¥0.0</div>
+            </div>
+        </div>
     </div>
     <!-- 顶部控制栏：核算账期与自定义月度预算 -->
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; background: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
@@ -40,7 +88,15 @@
 
     <!-- 中间：核心可视化双图 -->
     <div class="chart-container">
-        <div id="barLineChart" class="chart-card"></div>
+        <div class="chart-card">
+            <!-- 绝对定位悬浮按钮 -->
+            <div class="chart-floating-control">
+                <input type="checkbox" id="toggle-datazoom">
+                <label for="toggle-datazoom" id="toggle-datazoom-label">聚焦模式</label>
+            </div>
+            <!-- 图表容器直接占满整个卡片 -->
+            <div id="barLineChart" class="chart-inner"></div>
+        </div>
         <div id="nestedDonutChart" class="chart-card"></div>
     </div>
 

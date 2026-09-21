@@ -21,30 +21,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 1. 顶部指标卡片
 function renderKpiCards(data) {
-    const kpiCards = document.getElementById('kpi-cards');
-    kpiCards.innerHTML = `
-        <div class="card">
-            <div class="card-label">下月待还花呗</div>
-            <div class="card-value" style="color: #e67e22;">¥${data.hb.need_pay.toFixed(2)}</div>
-        </div>
-        <div class="card">
-            <div class="card-label">建议今日起可用日均</div>
-            <div class="card-value" style="color: #27ae60;">¥${data.budget.dynamic_safe_budget.toFixed(1)}/天</div>
-        </div>
-        <div class="card">
-            <div class="card-label">基准安全日均</div>
-            <div class="card-value">¥${data.budget.safe_daily_baseline.toFixed(1)}/天</div>
-        </div>
-        <div class="card">
-            <div class="card-label">拿铁因子（饮食*累计）</div>
-            <div class="card-value" style="color: #c0392b;">¥${data.latte.cost.toFixed(1)}</div>
-        </div>
-    `;
+    if (!data) return;
+    const overview = data.overview || {};
+    const hb = data.hb || {};
+    const budget = data.budget || {};
+    const latte = data.latte || {};
+    // 1. 月度总支出
+    const totalExpenseElem = document.getElementById('card-total-expense');
+    if (totalExpenseElem) {
+        totalExpenseElem.innerText = `¥${Number(overview.monthly_total_expense || 0).toFixed(2)}`;
+    }
+    // 2. 资产净增长
+    const netGrowthElem = document.getElementById('card-net-growth');
+    const growthHintElem = document.getElementById('card-growth-hint');
+    if (netGrowthElem) {
+        const netGrowth = Number(overview.monthly_net_growth || 0);
+        if (netGrowth >= 0) {
+            netGrowthElem.innerText = `+¥${netGrowth.toFixed(2)}`;
+            netGrowthElem.style.color = '#16a34a';
+            if (growthHintElem) growthHintElem.innerText = "当月收支结余健康";
+        } else {
+            netGrowthElem.innerText = `-¥${Math.abs(netGrowth).toFixed(2)}`;
+            netGrowthElem.style.color = '#dc2626';
+            if (growthHintElem) growthHintElem.innerText = "当月支出超过总收入";
+        }
+    }
+    // 3. 待收回垫付
+    const pendingRecoveryElem = document.getElementById('card-pending-recovery');
+    const recoveryHintElem = document.getElementById('card-recovery-hint');
+    if (pendingRecoveryElem) {
+        const pendingRec = Number(overview.pending_recovery || 0);
+        pendingRecoveryElem.innerText = `¥${pendingRec.toFixed(2)}`;
+        if (pendingRec <= 0) {
+            pendingRecoveryElem.style.color = '#64748b';
+            if (recoveryHintElem) recoveryHintElem.innerText = "本期垫付已全部平账";
+        } else {
+            pendingRecoveryElem.style.color = '#2563eb';
+            if (recoveryHintElem) recoveryHintElem.innerText = `仍有 ¥${pendingRec.toFixed(2)} 待平账`;
+        }
+    }
+    // 4. 花呗待还
+    const hbElem = document.getElementById('card-hb-need-pay');
+    if (hbElem) hbElem.innerText = `¥${Number(hb.need_pay || 0).toFixed(2)}`;
+    // 5. 建议日均
+    const dynamicBudgetElem = document.getElementById('card-dynamic-budget');
+    if (dynamicBudgetElem) dynamicBudgetElem.innerText = `¥${Number(budget.dynamic_safe_budget || 0).toFixed(1)}/天`;
+    // 6. 基准日均
+    const baselineBudgetElem = document.getElementById('card-baseline-budget');
+    if (baselineBudgetElem) baselineBudgetElem.innerText = `¥${Number(budget.safe_daily_baseline || 0).toFixed(1)}/天`;
+    // 7. 拿铁因子
+    const latteElem = document.getElementById('card-latte-cost');
+    if (latteElem) latteElem.innerText = `¥${Number(latte.cost || 0).toFixed(1)}`;
 }
 
 // 2. 左侧图：堆叠柱状图 + 净支出走势折线
 function renderBarLineChart(data) {
-    const chart = echarts.init(document.getElementById('barLineChart'));
+    const chartDom = document.getElementById('barLineChart');
+    if (!chartDom) return;
+    const chart = echarts.init(chartDom);
     const dates = data.daily_trend.dates;
     const categories = data.daily_trend.categories;
     const pivot = data.daily_trend.pivot_data;
@@ -74,27 +108,108 @@ function renderBarLineChart(data) {
         }
     });
 
+    const MOBILE_BREAKPOINT = 768;
+    const checkboxElem = document.getElementById('toggle-datazoom');
+    const labelElem = document.getElementById('toggle-datazoom-label');
+
+    // 生成 dataZoom 配置：
+    // 当 enabled 为 false 时，重置显示范围为 0% ~ 100% 并隐藏滑块，彻底恢复完整模式
+    function getZoomConfig(enabled) {
+        return [
+            {
+                type: 'inside',
+                disabled: !enabled,
+                start: enabled ? 65 : 0,
+                end: 100,
+                zoomOnMouseWheel: enabled,
+                moveOnMouseMove: enabled,
+                moveOnMouseWheel: enabled
+            },
+            {
+                type: 'slider',
+                show: enabled,
+                start: enabled ? 65 : 0,
+                end: 100,
+                height: 14,
+                bottom: 8,
+                borderColor: 'transparent',
+                backgroundColor: '#f1f5f9',
+                fillerColor: 'rgba(59, 130, 246, 0.2)',
+                handleSize: '100%',
+                showDetail: false
+            }
+        ];
+    }
+
+    function syncZoomState() {
+        const isSmallScreen = window.innerWidth <= MOBILE_BREAKPOINT;
+
+        if (checkboxElem) {
+            if (isSmallScreen) {
+                checkboxElem.checked = true;
+                checkboxElem.disabled = true;
+                if (labelElem) labelElem.innerText = "聚焦 (小屏锁定)";
+            } else {
+                checkboxElem.disabled = false;
+                if (labelElem) labelElem.innerText = "聚焦模式";
+            }
+        }
+
+        const shouldEnableZoom = checkboxElem ? checkboxElem.checked : isSmallScreen;
+
+        chart.setOption({
+            grid: {
+                left: '3%',
+                right: '4%',
+                top: 90, // 给顶部标题和图例留出足够空间
+                bottom: shouldEnableZoom ? 50 : 36,
+                containLabel: true
+            },
+            dataZoom: getZoomConfig(shouldEnableZoom)
+        });
+    }
+
     chart.setOption({
         title: {
             text: '逐日日常支出分类构成与净支出走势',
             subtext: '鼠标悬停可查看每日分类明细与走势',
-            left: 'center'
+            left: 'center',
+            top: 6
         },
         tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'cross' }
         },
         legend: {
-            top: 45,
-            type: 'scroll'
+            top: 50,
+            type: 'scroll',
+            // 避免左右过宽遮挡纵坐标标题和右上角勾选按钮
+            left: '12%',
+            right: '12%'
         },
-        grid: { left: '4%', right: '4%', bottom: '8%', top: 95, containLabel: true },
         xAxis: { type: 'category', data: dates, axisLabel: { rotate: 35 } },
-        yAxis: { type: 'value', name: '金额 (元)' },
+        yAxis: {
+            type: 'value',
+            name: '金额 (元)',
+            nameGap: 14,
+            nameTextStyle: {
+                align: 'center',
+                padding: [0, 6, 0, 0]
+            }
+        },
         series: seriesList
     });
 
-    window.addEventListener('resize', () => chart.resize());
+    syncZoomState();
+
+    if (checkboxElem) {
+        checkboxElem.addEventListener('change', syncZoomState);
+    }
+
+    window.addEventListener('resize', () => {
+        chart.resize();
+        syncZoomState();
+    });
 }
 
 // 3. 右侧图：紧凑微空心双环图

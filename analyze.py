@@ -87,6 +87,18 @@ def process_expense_data(
         df[(df["交易类型"] == "EX") & rent_condition]["实际金额"].sum()
     )
 
+    # (0) 总览数据
+        # 1. 按交易类型汇总金额 (严格基于用户定义: AR=垫付, AP=收回, EX=支出, IN=收入)
+    type_sums = df.groupby("交易类型")["实际金额"].sum().to_dict()
+    ex_val = float(type_sums.get("EX", 0.0))  # 支出
+    in_val = float(type_sums.get("IN", 0.0))  # 收入
+    ar_val = float(type_sums.get("AR", 0.0))  # 垫付
+    ap_val = float(type_sums.get("AP", 0.0))  # 收回
+        # 2. 按照公式计算三大核心财务指标
+    monthly_total_expense = round(ex_val + ar_val - ap_val, 2)  # SUM(EX + AR - AP)
+    monthly_net_growth = round(in_val - ex_val - ar_val + ap_val, 2)  # SUM(IN - EX - AR + AP)
+    pending_recovery = round(ar_val - ap_val, 2)  # SUM(AR - AP)
+
     # (1) 花呗
     hb_spent = float(df[df["支付账户"] == "HB"]["实际金额"].sum())
     hb_repaid = float(
@@ -237,6 +249,15 @@ def process_expense_data(
     )
 
     data_bundle = {
+        "overview": {
+            "monthly_total_expense": monthly_total_expense,
+            "monthly_net_growth": monthly_net_growth,
+            "pending_recovery": pending_recovery,
+            "raw_income": in_val,
+            "raw_expense": ex_val,
+            "raw_advance": ar_val,
+            "raw_recovered": ap_val
+        },
         "hb": {
             "spent": round(hb_spent, 2),
             "repaid": round(hb_repaid, 2),
