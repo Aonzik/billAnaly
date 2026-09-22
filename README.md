@@ -77,6 +77,31 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 
 ## 3. 快速上手 (Getting Started)
 
+你可以选择**方式一（一键脚本快速启动）**或**方式二（手动分步执行）**来进行部署：
+
+---
+
+### 方式一：一键快速启动（推荐）
+
+项目内置了自动化环境准备与启动脚本，会自动检测并优先调用 Python 3.12 创建虚拟环境、安装依赖并启动服务。
+
+1. **克隆仓库并进入目录**：
+  ```bash
+  git clone https://github.com/aonzik/billAnaly.git
+  cd billAnaly
+
+  ```
+
+2. **配置应用参数**：
+在项目根目录检查编辑 `config-example.yaml`（填入你的 DeepSeek API Key）并重命名为 `config.yaml`。
+3. **双击或运行启动脚本**：
+* **Windows**：双击运行项目根目录下的 `quickstart.bat`。
+* **macOS**：初次使用需在终端赋予执行权限 `chmod +x quickstart.command`，随后在访达中双击 `quickstart.command` 即可运行。
+
+---
+
+### 方式二：手动分步执行
+
 ### 第一步：克隆仓库与准备虚拟环境
 ```bash
 git clone https://github.com/aonzik/billAnaly.git
@@ -84,6 +109,10 @@ cd billAnaly
 
 # 创建 Python 3.12.6 虚拟环境
 python -m venv venv
+# Windows 可用下述指令指定 3.12 版本：
+# py -3.12 -m venv venv
+# MacOS/Linux 可用下述指令指定 3.12 版本：
+# python3.12 -m venv venv
 
 # 激活虚拟环境
 # Windows:
@@ -103,7 +132,7 @@ pip install -r requirements.txt
 
 ### 第三步：配置应用参数
 
-在项目根目录检查并编辑 `config.yaml`：
+在项目根目录检查编辑 `config-example.yaml` 并重命名为 `config.yaml`：
 
 ```yaml
 deepseek:
