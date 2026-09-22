@@ -79,7 +79,7 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 
 ### 第一步：克隆仓库与准备虚拟环境
 ```bash
-git clone https://github.com/komuro-kaede/billAnaly.git
+git clone https://github.com/aonzik/billAnaly.git
 cd billAnaly
 
 # 创建 Python 3.12.6 虚拟环境
@@ -162,11 +162,8 @@ billAnaly/
 ```yaml
 deepseek:
   api_key: "sk-your-deepseek-api-key"
-  base_url: "[https://api.deepseek.com](https://api.deepseek.com)"
+  base_url: "https://api.deepseek.com"
   model: "deepseek-flash"
-
-budget:
-  monthly_budget: 2800.0
 
 # 商户排行榜需剔除的内部账户/通道
 non_merchants:
@@ -322,7 +319,7 @@ ai_tasks:
 
 ### 开源协议
 
-本项目采用 [MIT License](https://www.google.com/search?q=LICENSE&utm_source=gemini) 授权许可。你可以自由地使用、修改和分发本项目代码。
+本项目采用 [MIT License](https://choosealicense.com/zh/licenses/mit/) 授权许可。你可以自由地使用、修改和分发本项目代码。
 
 ---
 
