@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/Database-SQLite3-003B57.svg)](https://www.sqlite.org/)
 [![AI Model](https://img.shields.io/badge/LLM-DeepSeek--Flash-4D6BFE.svg)](https://www.deepseek.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
 [![AIGC Assisted](https://img.shields.io/badge/AIGC-Powered%20by%20Gemini-8E75FF.svg)](#9-致谢与-aigc-声明-acknowledgments--aigc-statement)
 
 BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财务分析系统。项目以后端 **FastAPI + SQLite3** 为核心，结合原生极简的前端看板与管理后台，并深度接入 **DeepSeek-Flash** 大模型，实现开箱即用的自动化多维账目核算、垫付对冲平账、图表可视化，以及全流水行为学深度审计与自然语言智能问答。
@@ -348,7 +348,7 @@ ai_tasks:
 
 ### 开源协议
 
-本项目采用 [MIT License](https://choosealicense.com/zh/licenses/mit/) 授权许可。你可以自由地使用、修改和分发本项目代码。
+本项目采用 [MIT License](LICENSE.md) 授权许可。你可以自由地使用、修改和分发本项目代码。
 
 ---
 
