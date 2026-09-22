@@ -134,13 +134,13 @@ def process_expense_data(
 
     latte_stats = {
         "count": len(latte_df),
-        "items": int(latte_df["件数"].sum()),
+        "items": int(latte_df["件数"].fillna(0).sum()),
         "cost": float(latte_df["实际金额"].sum()),
         "drinks_count": len(drinks),
-        "drinks_items": int(drinks["件数"].sum()),
+        "drinks_items": int(drinks["件数"].fillna(0).sum()),
         "drinks_cost": float(drinks["实际金额"].sum()),
         "snacks_count": len(snacks),
-        "snacks_items": int(snacks["件数"].sum()),
+        "snacks_items": int(snacks["件数"].fillna(0).sum()),
         "snacks_cost": float(snacks["实际金额"].sum()),
     }
 
@@ -197,10 +197,22 @@ def process_expense_data(
 
     # 提取月份
     month_str = "09"
-    if len(df) > 0:
-        first_d = str(df["日期"].iloc[0]).replace("-", "")
-        # 如果是 20260901 格式取 09，如果是 0901 格式取 09
-        month_str = first_d[4:6] if len(first_d) >= 8 else first_d[:2]
+    if len(df) > 0 and pd.notna(df["日期"].iloc[0]):
+        raw_str = str(df["日期"].iloc[0]).strip()
+        # 针对带分隔符的格式（如 2026-09-01, 2026-9-1, 26-09-01, 2026/9/1 等）
+        # 匹配 年-月-日 中的 "月"
+        sep_match = re.search(r"^\d{2,4}[-/.]([0-1]?\d)[-/.]([0-3]?\d)", raw_str)
+        # 针对纯数字紧凑格式（如 20260901, 260901, 0901）
+        if sep_match:
+            m = int(sep_match.group(1))
+            month_str = f"{m:02d}"
+        elif raw_str.isdigit():
+            if len(raw_str) == 8:      # 20260901 -> 取第 5-6 位
+                month_str = raw_str[4:6]
+            elif len(raw_str) == 6:    # 260901   -> 取第 3-4 位
+                month_str = raw_str[2:4]
+            elif len(raw_str) == 4:    # 0901     -> 取第 1-2 位
+                month_str = raw_str[:2]
 
     days_in_month = calendar.monthrange(2026, int(month_str))[1]
 

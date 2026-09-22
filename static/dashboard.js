@@ -490,11 +490,7 @@ async function initMonthSelector() {
 async function changeMonth(selectedYm) {
     await fetch(`/api/refresh_analysis?year_month=${selectedYm}`, { method: 'POST' });
     // 重新拉取 static/expense_data.json 渲染 ECharts（调用你原有的渲染总函数）
-    if (typeof loadDashboardData === 'function') {
-        loadDashboardData();
-    } else {
-        location.reload();
-    }
+    location.reload();
 }
 
 // =========================================================================
@@ -602,11 +598,7 @@ async function refreshWithCurrentParams() {
     const data = await res.json();
 
     // 重新拉取并渲染 ECharts 图表（若有该函数则调用，没有则刷新页面）
-    if (typeof loadDashboardData === 'function') {
-        loadDashboardData();
-    } else {
-        location.reload();
-    }
+    location.reload();
 }
 
 // 在页面 DOM 加载完成后执行初始化
