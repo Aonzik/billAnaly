@@ -628,7 +628,7 @@ def run_analysis_from_db(
     data = process_expense_data(
         df=df, monthly_budget=monthly_budget, current_day=current_day
     )
-    data["wordcloud"] = generate_wordcloud_data(db_path=db_path)
+    data["wordcloud"] = generate_wordcloud_data(df_source=df)
     if json_path:
         export_to_json(data, json_path)
     return data
