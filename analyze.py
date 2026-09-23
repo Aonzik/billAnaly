@@ -64,15 +64,17 @@ WORDCLOUD_STOP_WORDS = {
 
 def clean_product_name(text: str) -> str:
     """清洗商品名中的规格、容量、包装数量（如 100ml, 300ml, .5L, x24 等）"""
+    if not text:
+        return ""
     text = str(text)
     # 1. 剔除包装倍数（如 x24, *12, X6, ×2 等）
-    text = re.sub(r"[xX*×]\s*\d+", " ", text)
+    text = re.sub(r"(?i)[xX*×]\s*\d+|\d+\s*[xX*×]", " ", text)
     # 2. 剔除容量与重量单位（如 100ml, 300ML, .5L, 1.5l, 500g, 2kg, 500毫升等）
-    text = re.sub(r"(?i)\.?\d+(\.\d+)?\s*(ml|l|g|kg|升|毫升|克|千克|斤|两)", " ", text)
+    text = re.sub(r"(?i)\.?\d+(\.\d+)?\s*(ml|l|g|kg|oz|升|毫升|克|千克|斤|两|'')", " ", text)
     # 3. 剔除残余的纯数字和孤立量词（如 24瓶, 1箱, 2盒 等）
-    text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块)", " ", text)
+    text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块|片|粒|条)", " ", text)
     # 4. 剔除剩余的孤立小数或数字
-    text = re.sub(r"(?<=\s|\b)\.?\d+(\.\d+)?(?=\s|\b)", " ", text)
+    text = re.sub(r"[\(（].*?[\)）]", " ", text)
     return text.strip()
 
 def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame = None, top_n: int = 80) -> dict:
@@ -92,6 +94,15 @@ def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame =
         finally:
             conn.close()
 
+    # 注册自定义专有名词
+    cfg = load_system_config()
+    custom_words = cfg.get("custom_words", [])
+    for w in custom_words:
+        w_clean = str(w).strip()
+        if w_clean:
+            # 动态提升该词词频，强制 jieba 不对其进行拆解
+            jieba.add_word(w_clean)
+
     freq_dict = defaultdict(int)
     amount_dict = defaultdict(float)
 
@@ -103,22 +114,31 @@ def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame =
         amt = float(amount or 0.0)
         tokens = jieba.lcut(cleaned_text)
 
-        # 过滤条件：长度>1、非纯数字/标点、非停用词、非残余单位
-        valid_words = [
-            w for w in set(tokens)
-            if len(w) > 1 
-            and not re.match(r"^[\d\W_]+$", w)
-            and w.lower() not in {"ml", "kg", "oz"}
-            and w not in WORDCLOUD_STOP_WORDS
-        ]
+        # ================= 核心过滤逻辑 =================
+        valid_words = []
+        for w in set(tokens):
+            w_clean = w.strip()
+            # 1. 过滤：单字不计
+            if len(w_clean) <= 1:
+                continue
+            # 2. 过滤：凡是包含任何数字的词（如 300g, 50ml, 104g, .5L, x24），直接秒杀剔除！
+            if re.search(r"\d", w_clean):
+                continue
+            # 3. 过滤：纯符号、纯英文字母残留、停用词
+            if re.match(r"^[\W_]+$", w_clean) or re.match(r"^[a-zA-Z]+$", w_clean):
+                continue
+            if w_clean in WORDCLOUD_STOP_WORDS:
+                continue
+
+        valid_words.append(w_clean)
 
         for w in valid_words:
             freq_dict[w] += 1
             amount_dict[w] += amt
-
+    # 按频次排序
     sorted_by_freq = sorted(freq_dict.items(), key=lambda x: x[1], reverse=True)[:top_n]
     by_freq_data = [{"name": k, "value": v} for k, v in sorted_by_freq if v > 0]
-
+    # 按金额排序
     sorted_by_amount = sorted(amount_dict.items(), key=lambda x: x[1], reverse=True)[:top_n]
     by_amount_data = [{"name": k, "value": round(v, 2)} for k, v in sorted_by_amount if v > 0]
 
