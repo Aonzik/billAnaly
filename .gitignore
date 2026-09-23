@@ -21,3 +21,6 @@ static/expense_data.json
 Thumbs.db
 .vscode/
 .idea/
+
+# 本地 js 资源
+static/js/*.js
