@@ -516,6 +516,9 @@ function jumpToManager(filters = {}) {
 // AI 智能问答与体检面板逻辑
 // =========================================================================
 
+// 定义全局变量，记录当前 AI 最新的原始 Markdown/文本内容
+let currentAiRawMarkdown = "";
+
 window.quickFill = function(text) {
     // 1. 动态获取当前界面输入框里的预算（若无则取本地缓存或兜底 2800）
     const budgetInput = document.getElementById('custom-budget-input');
@@ -559,6 +562,7 @@ async function runAiDiagnose() {
         const data = await res.json();
         
         if (data.advice) {
+            currentAiRawMarkdown = data.advice;
             box.innerHTML = marked.parse(data.advice);
         } else if (data.detail) {
             box.innerHTML = `<span style="color:#dc2626;">❌ 请求失败: ${data.detail}</span>`;
@@ -596,6 +600,7 @@ async function submitAiQuery() {
         const data = await res.json();
 
         if (data.answer) {
+            currentAiRawMarkdown = data.answer;
             box.innerHTML = marked.parse(data.answer);
         } else if (data.detail) {
             box.innerHTML = `<span style="color:#dc2626;">❌ 提问失败: ${data.detail}</span>`;
@@ -657,6 +662,7 @@ window.runDeepRead = async function() {
 
         if (box) {
             if (data.report) {
+                currentAiRawMarkdown = data.report;
                 // 如果页面引入了 marked.js 则渲染 Markdown，否则优雅降级为纯文本显示
                 if (typeof marked !== 'undefined' && marked.parse) {
                     box.innerHTML = marked.parse(data.report);
@@ -681,6 +687,47 @@ window.runDeepRead = async function() {
         }
     }
 };
+
+// ai 回答导出
+function exportAiAdvice() {
+    const box = document.getElementById('ai-response-box');
+
+    // 优先读取原始 Markdown 文本，如果没有就读取 innerText 兜底
+    let exportContent = currentAiRawMarkdown;
+    if (!exportContent || !exportContent.trim()) {
+        exportContent = box.innerText.trim();
+    }
+
+    // 校验是否有有效内容（排除默认提示文案）
+    if (!exportContent || exportContent.includes("点击上方“生成本月财务体检报告”")) {
+        alert("当前暂无可导出的 AI 分析内容，请先生成报告或提问！");
+        return;
+    }
+
+    // 生成时间戳文件名：如 AI财务分析报告_2026-03-24_1430.md
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const filename = `AI财务分析报告_${timestamp}.md`;
+
+    // 加上文件头部元信息
+    const fileHeader = `# AI 智能财务顾问分析报告\n> 导出时间: ${now.toLocaleString()}\n\n---\n\n`;
+    const fullContent = fileHeader + exportContent;
+
+    // 创建 Blob 对象并触发无感下载
+    const blob = new Blob([fullContent], { type: 'text/markdown;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url); // 释放内存
+}
 
 // =========================================================================
 // 自定义月度预算逻辑与联动刷新
