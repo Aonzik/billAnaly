@@ -72,7 +72,7 @@ def clean_product_name(text: str) -> str:
     # 3. 剔除残余的纯数字和孤立量词（如 24瓶, 1箱, 2盒 等）
     text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块)", " ", text)
     # 4. 剔除剩余的孤立小数或数字
-    text = re.sub(r"(?<=\s|\b)\.?\d+(\.\d+)?(?=\s|\b)", " ", text)
+    text = re.sub(r"\b\d+(\.\d+)?\b", " ", text)
     return text.strip()
 
 def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame = None, top_n: int = 80) -> dict:
@@ -158,7 +158,7 @@ def process_expense_data(
     rent_condition = (
         df["分类"].str.contains("房租")
         | df["品名"].str.contains("房租")
-        | df["品名"].str.contains("押金")
+        | (df["分类"].str.contains("住房|居家") & df["品名"].str.contains("押金"))
     )
     rent_total = float(
         df[(df["交易类型"] == "EX") & rent_condition]["实际金额"].sum()
@@ -253,19 +253,28 @@ def process_expense_data(
         for name, row in merchant_stats_df.iterrows()
     ]
 
-    # (5) 动态预算
+    # (5) 动态预算：每日净支出计算 (EX + AR - AP)
     pure_daily_ex = df[
         (df["交易类型"] == "EX") & (~rent_condition) & (~accident_mask)
     ]
     pure_daily_ex_sum = pure_daily_ex.groupby("日期")["实际金额"].sum()
+
+    pure_daily_ar = df[(df["交易类型"] == "AR") & (~rent_condition) & (~accident_mask)]
+    pure_daily_ar_sum = pure_daily_ar.groupby("日期")["实际金额"].sum()
 
     regular_ap = df[
         (df["交易类型"] == "AP") & (~rent_condition) & (~accident_mask)
     ]
     regular_ap_sum = regular_ap.groupby("日期")["实际金额"].sum()
 
+    # 按照严格财务对冲公式：EX + AR - AP
+    daily_net_series = (
+        pure_daily_ex_sum.add(pure_daily_ar_sum, fill_value=0)
+        .subtract(regular_ap_sum, fill_value=0)
+    )
+
     daily_net_df = (
-        pure_daily_ex_sum.subtract(regular_ap_sum, fill_value=0)
+        daily_net_series
         .reset_index()
         .rename(columns={"实际金额": "净支出"})
         .sort_values("日期")
