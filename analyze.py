@@ -72,7 +72,7 @@ def clean_product_name(text: str) -> str:
     # 2. 剔除容量与重量单位（如 100ml, 300ML, .5L, 1.5l, 500g, 2kg, 500毫升等）
     text = re.sub(r"(?i)\.?\d+(\.\d+)?\s*(ml|l|g|kg|oz|升|毫升|克|千克|斤|两|'')", " ", text)
     # 3. 剔除残余的纯数字和孤立量词（如 24瓶, 1箱, 2盒 等）
-    text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块|片|粒|条)", " ", text)
+    text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块|片|粒|条|h)", " ", text)
     # 4. 剔除剩余的孤立小数或数字
     text = re.sub(r"[\(（].*?[\)）]", " ", text)
     return text.strip()
