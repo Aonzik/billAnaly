@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDonutChart(data);
             renderLatteFactor(data);   // 新增：渲染拿铁因子明细
             renderMerchantRank(data);   // 新增：渲染商户复购榜
+            renderWordCloud(data);     // 新增：渲染全景词云
         })
         .catch(err => {
             console.error('加载数据失败:', err);
@@ -373,6 +374,108 @@ function renderMerchantRank(data) {
         `;
     }).join('');
 }
+
+// =========================================================================
+// 6. 新增：消费品名全景词云逻辑 (支持频次 / 金额双模式切换)
+// =========================================================================
+let wordCloudChart = null;
+let wordCloudCache = { by_freq: [], by_amount: [] };
+let currentWordCloudMode = 'freq'; // 'freq' | 'amount'
+
+// 外部调用的入口函数：接收 expense_data.json 里的 wordcloud 数据
+function renderWordCloud(data) {
+    if (!data || !data.wordcloud) return;
+    wordCloudCache = data.wordcloud;
+    
+    // 检查当前拨动开关状态
+    const toggle = document.getElementById('wc-mode-toggle');
+    const mode = (toggle && toggle.checked) ? 'amount' : 'freq';
+    renderWordCloudChart(mode);
+}
+
+// 核心渲染函数
+function renderWordCloudChart(mode = 'freq') {
+    const chartDom = document.getElementById('wordcloud-chart');
+    if (!chartDom) return;
+
+    if (!wordCloudChart) {
+        wordCloudChart = echarts.init(chartDom);
+        window.addEventListener('resize', () => {
+            if (wordCloudChart) wordCloudChart.resize();
+        });
+    }
+
+    const isAmount = (mode === 'amount');
+    const dataList = isAmount ? wordCloudCache.by_amount : wordCloudCache.by_freq;
+
+    // 动态切换开关两端文字的高亮颜色
+    const labelFreq = document.getElementById('label-mode-freq');
+    const labelAmount = document.getElementById('label-mode-amount');
+    if (labelFreq && labelAmount) {
+        labelFreq.style.color = isAmount ? '#94a3b8' : '#2563eb';
+        labelAmount.style.color = isAmount ? '#ea580c' : '#94a3b8';
+    }
+
+    const option = {
+        tooltip: {
+            show: true,
+            formatter: function (params) {
+                return `<b>${params.name}</b><br/>${isAmount ? '累计支出金额' : '消费出现频次'}: <b>${params.value}</b> ${isAmount ? '元' : '次'}`;
+            }
+        },
+        series: [{
+            type: 'wordCloud',
+            shape: 'circle',
+            keepAspect: false,
+            left: 'center',
+            top: 'center',
+            width: '95%',
+            height: '90%',
+            sizeRange: isAmount ? [14, 46] : [13, 42],
+            rotationRange: [-45, 45],
+            rotationStep: 45,
+            gridSize: 8,
+            drawOutOfBound: false,
+            layoutAnimation: true,
+            textStyle: {
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                fontWeight: 'bold',
+                color: function () {
+                    // 金额模式偏暖红金色系，频次模式偏清新冷蓝色系
+                    if (isAmount) {
+                        return 'rgb(' + [
+                            Math.round(180 + Math.random() * 60),
+                            Math.round(40 + Math.random() * 80),
+                            Math.round(20 + Math.random() * 50)
+                        ].join(',') + ')';
+                    } else {
+                        return 'rgb(' + [
+                            Math.round(30 + Math.random() * 100),
+                            Math.round(70 + Math.random() * 110),
+                            Math.round(160 + Math.random() * 80)
+                        ].join(',') + ')';
+                    }
+                }
+            },
+            emphasis: {
+                focus: 'self',
+                textStyle: {
+                    textShadowBlur: 8,
+                    textShadowColor: 'rgba(0, 0, 0, 0.25)'
+                }
+            },
+            data: dataList || []
+        }]
+    };
+
+    wordCloudChart.setOption(option, true);
+}
+
+// 拨动开关切换事件（绑定在 HTML 上的 onchange="switchWordCloudMode(this.checked)"）
+window.switchWordCloudMode = function(isAmountChecked) {
+    currentWordCloudMode = isAmountChecked ? 'amount' : 'freq';
+    renderWordCloudChart(currentWordCloudMode);
+};
 
 // =========================================================================
 // AI 智能问答与体检面板逻辑

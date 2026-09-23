@@ -6,6 +6,8 @@ import yaml
 import re
 import sqlite3
 import unicodedata
+import jieba
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -13,6 +15,11 @@ import pandas as pd
 # 设置 Matplotlib 中文字体支持
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial Unicode MS"]
 plt.rcParams["axes.unicode_minus"] = False
+
+WORDCLOUD_STOP_WORDS = {
+    "微信", "一份", "支付", "支出", "账单", "退款", "购买", "消费", 
+    "商品", "代金券", "优惠券", "红包", "其他", "备注", "我们", "这个"
+}
 
 
 def load_system_config(config_file: str = "config.yaml") -> dict:
@@ -46,6 +53,76 @@ def pad_chinese(text, width):
     padding = max(0, width - disp_width)
     return text + " " * padding
 
+# =========================================================================
+# 词云清洗规则与统计引擎
+# =========================================================================
+# 过滤助词、交易通道、无实际商品特征的杂词
+WORDCLOUD_STOP_WORDS = {
+    "微信", "支付宝", "支付", "支出", "账单", "退款", "购买", "消费", 
+    "商品", "代金券", "优惠券", "红包", "其他", "备注", "我们", "这个"
+}
+
+def clean_product_name(text: str) -> str:
+    """清洗商品名中的规格、容量、包装数量（如 100ml, 300ml, .5L, x24 等）"""
+    text = str(text)
+    # 1. 剔除包装倍数（如 x24, *12, X6, ×2 等）
+    text = re.sub(r"[xX*×]\s*\d+", " ", text)
+    # 2. 剔除容量与重量单位（如 100ml, 300ML, .5L, 1.5l, 500g, 2kg, 500毫升等）
+    text = re.sub(r"(?i)\.?\d+(\.\d+)?\s*(ml|l|g|kg|升|毫升|克|千克|斤|两)", " ", text)
+    # 3. 剔除残余的纯数字和孤立量词（如 24瓶, 1箱, 2盒 等）
+    text = re.sub(r"\d+\s*(瓶|罐|包|盒|份|个|支|箱|袋|听|块)", " ", text)
+    # 4. 剔除剩余的孤立小数或数字
+    text = re.sub(r"(?<=\s|\b)\.?\d+(\.\d+)?(?=\s|\b)", " ", text)
+    return text.strip()
+
+def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame = None, top_n: int = 80) -> dict:
+    """提取所有月份的实际支出(EX)，清洗后分词并生成频次与金额双加权数据"""
+    rows = []
+    if df_source is not None:
+        # 兼容直接传入 DataFrame（如离线运行 Excel）
+        ex_df = df_source[df_source["交易类型"] == "EX"]
+        rows = ex_df[["品名", "实际金额"]].dropna().values.tolist()
+    elif os.path.exists(db_path):
+        # 默认从 bills.db 全量读取跨月份历史
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 品名, 实际金额 FROM expenses WHERE 交易类型 = 'EX' AND 品名 IS NOT NULL AND 品名 != ''")
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+    freq_dict = defaultdict(int)
+    amount_dict = defaultdict(float)
+
+    for item_name, amount in rows:
+        cleaned_text = clean_product_name(item_name)
+        if not cleaned_text:
+            continue
+        
+        amt = float(amount or 0.0)
+        tokens = jieba.lcut(cleaned_text)
+
+        # 过滤条件：长度>1、非纯数字/标点、非停用词、非残余单位
+        valid_words = [
+            w for w in set(tokens)
+            if len(w) > 1 
+            and not re.match(r"^[\d\W_]+$", w)
+            and w.lower() not in {"ml", "kg", "oz"}
+            and w not in WORDCLOUD_STOP_WORDS
+        ]
+
+        for w in valid_words:
+            freq_dict[w] += 1
+            amount_dict[w] += amt
+
+    sorted_by_freq = sorted(freq_dict.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    by_freq_data = [{"name": k, "value": v} for k, v in sorted_by_freq if v > 0]
+
+    sorted_by_amount = sorted(amount_dict.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    by_amount_data = [{"name": k, "value": round(v, 2)} for k, v in sorted_by_amount if v > 0]
+
+    return {"by_freq": by_freq_data, "by_amount": by_amount_data}
 
 # =========================================================================
 # 1. 核心计算层（支持传入 file_path 或 外部 df）
@@ -493,8 +570,19 @@ def render_matplotlib_charts(data):
 
 def export_to_json(data, output_json_path="expense_data.json"):
     chart_payload = {k: v for k, v in data.items() if k != "_raw"}
+    # 增加万能兜底转换函数
+    def default_serializer(obj):
+        if isinstance(obj, (pd.DataFrame, pd.Series)):
+            return obj.to_dict()
+        if isinstance(obj, (np.integer, np.int64, np.int32)):
+            return int(obj)
+        if isinstance(obj, (np.floating, np.float64, np.float32)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return str(obj)
     with open(output_json_path, "w", encoding="utf-8") as f:
-        json.dump(chart_payload, f, ensure_ascii=False, indent=2)
+        json.dump(chart_payload, f, ensure_ascii=False, indent=2, default=default_serializer)
     print(f"[OK] 数据接口已更新: {output_json_path}")
 
 
@@ -520,6 +608,7 @@ def run_analysis_from_db(
     data = process_expense_data(
         df=df, monthly_budget=monthly_budget, current_day=current_day
     )
+    data["wordcloud"] = generate_wordcloud_data(db_path=db_path)
     if json_path:
         export_to_json(data, json_path)
     return data
