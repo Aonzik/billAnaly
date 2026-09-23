@@ -113,6 +113,63 @@ async function loadData() {
     }
 }
 
+// 自动读取 URL 中的过滤参数并填入对应筛选框
+function applyUrlFilterParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    let hasFilter = false;
+
+    // 1. 日期联动：对齐真实的 filter-start 和 filter-end ID
+    const dateVal = urlParams.get('date') || urlParams.get('start_date');
+    if (dateVal) {
+        const startInput = document.getElementById('filter-start') || document.getElementById('filter-start-date');
+        const endInput = document.getElementById('filter-end') || document.getElementById('filter-end-date');
+        if (startInput) startInput.value = dateVal;
+        if (endInput) endInput.value = dateVal;
+        hasFilter = true;
+    }
+
+    // 2. 消费分类联动 + 自动勾选精确匹配
+    const catVal = urlParams.get('category');
+    if (catVal) {
+        const catSelect = document.getElementById('filter-category');
+        if (catSelect) {
+            catSelect.value = catVal;
+            hasFilter = true;
+        }
+
+        // 核心修复：自动激活“精确匹配”，防止“饮食*”混入“饮食”
+        const exactCheck = document.getElementById('filter-exact');
+        if (exactCheck) {
+            exactCheck.checked = true;
+        }
+    }
+
+    // 3. 商户联动 (目标账户)
+    const merchantVal = urlParams.get('merchant');
+    if (merchantVal) {
+        const merchantInput = document.getElementById('filter-merchant') || 
+                              document.getElementById('filter-target-account') || 
+                              document.getElementById('filter-keyword');
+        if (merchantInput) {
+            merchantInput.value = merchantVal;
+            hasFilter = true;
+        }
+    }
+
+    // 4. 词云关键词/品名联动
+    const keywordVal = urlParams.get('keyword');
+    if (keywordVal) {
+        const nameInput = document.getElementById('filter-name') || 
+                          document.getElementById('filter-keyword');
+        if (nameInput) {
+            nameInput.value = keywordVal;
+            hasFilter = true;
+        }
+    }
+
+    return hasFilter;
+}
+
 // 行内直接修改
 function inlineEdit(cell, id) {
     if (!id || id === 'null' || id === 'undefined') {
@@ -247,17 +304,39 @@ async function deleteItem(id) {
 
 // 重置筛选
 function resetFilter() {
-    document.getElementById('filter-start').value = '';
-    document.getElementById('filter-end').value = '';
-    document.getElementById('filter-category').value = '';
-    document.getElementById('filter-exact').checked = false;
-    document.getElementById('filter-account').value = '';
-    document.getElementById('sort-order').value = 'desc';
-    document.getElementById('filter-name').value = '';
-    document.getElementById('filter-type').value = '';
-    document.getElementById('filter-merchant').value = '';
-    document.getElementById('filter-min-amount').value = '';
-    document.getElementById('filter-max-amount').value = '';
+    if (event && event.preventDefault) {
+        event.preventDefault(); // 阻止按钮在 form 内的默认提交行为
+    }
+
+    // 辅助清空函数，防止某个元素在 HTML 中不存在时导致整段代码崩溃报错
+    const clearVal = (id, defaultVal = '') => {
+        const el = document.getElementById(id);
+        if (el) el.value = defaultVal;
+    };
+    const setChecked = (id, status = false) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = status;
+    };
+
+    // 1. 清空所有筛选框
+    clearVal('filter-start');
+    clearVal('filter-end');
+    clearVal('filter-category');
+    setChecked('filter-exact', false);
+    clearVal('filter-account');
+    clearVal('sort-order', 'desc');
+    clearVal('filter-name');
+    clearVal('filter-type');
+    clearVal('filter-merchant');
+    clearVal('filter-min-amount');
+    clearVal('filter-max-amount');
+
+    // 2. 清除浏览器地址栏中的 ?date=... 参数，避免刷新再次带入
+    if (window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // 3. 执行全量加载
     loadData();
 }
 
@@ -362,4 +441,10 @@ async function exportToExcel() {
 
 // 初始化默认今日日期
 document.getElementById('date').value = new Date().toISOString().split('T')[0];
-loadData();
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. 读取 URL 传递过来的跳转参数并回填到界面筛选框
+    applyUrlFilterParams();
+
+    // 2. 执行原有的加载流水数据逻辑（此时收集筛选参数的函数会自动读取回填好的值）
+    loadData(); 
+});

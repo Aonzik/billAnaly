@@ -168,6 +168,16 @@ function renderBarLineChart(data) {
             },
             dataZoom: getZoomConfig(shouldEnableZoom)
         });
+        // 监听柱块点击：获取日期和分类
+        chart.off('click'); // 防止重复绑定
+        chart.on('click', function (params) {
+            // 排除趋势折线和标线，仅响应柱状堆叠块
+            if (params.seriesType === 'bar') {
+                const date = params.name;       // X 轴日期 (如 2026-09-12)
+                const category = params.seriesName; // 堆叠系列的分类名称 (如 饮食、交通)
+                jumpToManager({ date: date, category: category });
+            }
+        });
     }
 
     chart.setOption({
@@ -364,7 +374,11 @@ function renderMerchantRank(data) {
         else if (rank === 3) rankClass = 'rank-3';
 
         return `
-            <tr>
+            <tr onclick="jumpToManager({ merchant: '${item.name}' })" 
+                style="cursor: pointer; transition: background 0.15s;" 
+                onmouseover="this.style.background='#f8fafc'" 
+                onmouseout="this.style.background=''"
+                title="点击筛选该商户全部流水">
                 <td><span class="rank-badge ${rankClass}">${rank}</span></td>
                 <td style="font-weight: 600; color: #1e293b;">${item.name}</td>
                 <td style="text-align: right; font-weight: bold; color: #2563eb;">${item.count} 次</td>
@@ -469,6 +483,14 @@ function renderWordCloudChart(mode = 'freq') {
     };
 
     wordCloudChart.setOption(option, true);
+    // 监听词云词语点击
+    wordCloudChart.off('click');
+    wordCloudChart.on('click', function (params) {
+        if (params.name) {
+            // 将点击的词作为品名/关键词传入筛选
+            jumpToManager({ keyword: params.name });
+        }
+    });
 }
 
 // 拨动开关切换事件（绑定在 HTML 上的 onchange="switchWordCloudMode(this.checked)"）
@@ -476,6 +498,19 @@ window.switchWordCloudMode = function(isAmountChecked) {
     currentWordCloudMode = isAmountChecked ? 'amount' : 'freq';
     renderWordCloudChart(currentWordCloudMode);
 };
+
+// 通用跳转至管理后台并携带筛选参数
+function jumpToManager(filters = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== null && value !== '') {
+            params.append(key, value);
+        }
+    }
+    // 当前页面跳转；若希望新标签页打开可改为 window.open(`manager.html?${params.toString()}`, '_blank');
+    const targetUrl = `manager.html?${params.toString()}`;
+    window.open(targetUrl, '_blank')
+}
 
 // =========================================================================
 // AI 智能问答与体检面板逻辑
