@@ -77,7 +77,7 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 - **数据处理与导出**: `SQLite3`, `Pandas`, `openpyxl`
 - **配置解析**: `PyYAML`
 - **大模型 SDK**: `openai`（适配 DeepSeek 开放平台接口）
-- **前端库**: 原生 JavaScript (ES6+), HTML5, CSS3, `ECharts 5.x`, `marked.js`
+- **前端库**: 原生 JavaScript (ES6+), HTML5, CSS3, `ECharts 5.x`, `marked.js`, `echarts-wordcloud.js`
 
 ---
 
@@ -131,8 +131,17 @@ source venv/bin/activate
 ### 第二步：安装项目依赖
 
 ```bash
+# 安装 python 第三方库依赖
 pip install --upgrade pip
 pip install -r requirements.txt
+# 安装前端库依赖
+# Windows:
+mkdir static/js -Force # macOS/Linux: mkdir -p js
+curl -o static/js/echarts.min.js "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
+curl -o static/js/marked.min.js "https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+curl -o static/js/echarts-wordcloud.min.js "https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"
+
+
 
 ```
 
@@ -177,13 +186,18 @@ billAnaly/
 ├── ai_assistant.py           # AI 模块 (动态热加载配置、财务体检、深度精读、账单问答)
 ├── db_manager.py             # 数据库 CRUD 路由与 Excel 导出接口
 ├── bills.db                  # SQLite 核心账单数据库(首次启动由服务自动检测并创建)
+├── requirements.txt          # Python 依赖清单
 ├── static/                   # 前端静态资源
 │   ├── dashboard.html        # 财务分析大屏页面 (含 dataZoom 时间聚焦组件)
 │   ├── dashboard.js          # 大屏数据拉取、ECharts 走势图与聚焦、AI 交互与预算联动
 │   ├── manager.html          # 流水数据管理与查询后台页面
 │   ├── manager.js            # 流水多维筛选、行内实时编辑、另存为导出逻辑
 │   ├── style.css             # 响应式全局界面样式与卡片网格布局
-│   └── expense_data.json     # 中间态账单分析聚合缓存文件
+│   ├── expense_data.json     # 中间态账单分析聚合缓存文件
+│   └── js/                   # 离线前端核心依赖库 (ECharts, Marked, WordCloud)
+├── quickstart.bat            # Windows 一键快速配置虚拟环境并启动
+├── quickstart.command        # macOS 一键快速配置虚拟环境并启动
+├── LICENSE.md                # MIT 开源许可证
 └── README.md                 # 项目使用与说明文档
 
 ```

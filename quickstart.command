@@ -62,7 +62,13 @@ else
     source venv/bin/activate
 fi
 
-# 2. 检查配置文件
+# 2. 安装前端依赖文件
+mkdir -p static/js
+curl -o static/js/echarts.min.js "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
+curl -o static/js/marked.min.js "https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+curl -o static/js/echarts-wordcloud.min.js "https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"
+
+# 3. 检查配置文件
 if [ ! -f "config.yaml" ]; then
     echo "[警告] 未检测到 config.yaml，请确认配置是否填写完整！"
 fi
