@@ -77,10 +77,10 @@ if not exist "venv\Scripts\activate.bat" (
 )
 
 :: 2. 安装前端依赖文件
-mkdir static/js -Force
-curl -o static/js/echarts.min.js "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
-curl -o static/js/marked.min.js "https://cdn.jsdelivr.net/npm/marked/marked.min.js"
-curl -o static/js/echarts-wordcloud.min.js "https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"
+if not exist "static\js" mkdir static\js
+if not exist "static\js\echarts.min.js" curl -sL -o static/js/echarts.min.js "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
+if not exist "static\js\marked.min.js" curl -sL -o static/js/marked.min.js "https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+if not exist "static\js\echarts-wordcloud.min.js" curl -sL -o static/js/echarts-wordcloud.min.js "https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"
 
 :: 3. 检查配置文件
 if not exist "config.yaml" (
