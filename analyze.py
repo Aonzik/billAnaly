@@ -54,7 +54,7 @@ def pad_chinese(text, width):
 # 过滤助词、交易通道、无实际商品特征的杂词
 WORDCLOUD_STOP_WORDS = {
     "微信", "支付宝", "支付", "支出", "账单", "退款", "购买", "消费", 
-    "商品", "代金券", "优惠券", "红包", "其他", "备注", "我们", "这个"
+    "商品", "代金券", "优惠券", "红包", "其他", "备注", "单人", "这个"
 }
 
 def clean_product_name(text: str) -> str:
@@ -87,9 +87,11 @@ def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame =
         finally:
             conn.close()
 
-    # 注册自定义专有名词
+    # 注册自定义专有名词与停用词
     cfg = load_system_config()
     custom_words = cfg.get("custom_words", [])
+    stop_words = cfg.get("stop_words", [])
+    WORDCLOUD_STOP_WORDS.update(stop_words)
     for w in custom_words:
         w_clean = str(w).strip()
         if w_clean:
