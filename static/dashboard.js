@@ -1,3 +1,20 @@
+// 统一定义一套美观、区分度高的分类配色板 (20色)
+const CATEGORY_PALETTE = [
+    '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+    '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#48b8d0',
+    '#e062ae', '#673ab7', '#009688', '#ff9800', '#795548',
+    '#607d8b', '#26a69a', '#8d6e63', '#ab47bc', '#5c6bc0'
+];
+
+// 基于所有分类名生成稳定的 { 分类名: 颜色 } 字典
+function buildCategoryColorMap(allCategories) {
+    const colorMap = {};
+    allCategories.forEach((cat, index) => {
+        colorMap[cat] = CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
+    });
+    return colorMap;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     fetch('expense_data.json')
         .then(response => {
@@ -7,9 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return response.json();
         })
         .then(data => {
+            // 提取所有分类并建立固定的映射表
+            const categories = data.daily_trend ? data.daily_trend.categories : [];
+            const colorMap = buildCategoryColorMap(categories);
             renderKpiCards(data);
-            renderBarLineChart(data);
-            renderDonutChart(data);
+            renderBarLineChart(data, colorMap);
+            renderDonutChart(data, colorMap);
             renderLatteFactor(data);   // 新增：渲染拿铁因子明细
             renderMerchantRank(data);   // 新增：渲染商户复购榜
             renderWordCloud(data);     // 新增：渲染全景词云
@@ -76,7 +96,7 @@ function renderKpiCards(data) {
 }
 
 // 2. 左侧图：堆叠柱状图 + 净支出走势折线
-function renderBarLineChart(data) {
+function renderBarLineChart(data, colorMap) {
     const chartDom = document.getElementById('barLineChart');
     if (!chartDom) return;
     const chart = echarts.init(chartDom);
@@ -90,6 +110,9 @@ function renderBarLineChart(data) {
         type: 'bar',
         stack: '支出构成',
         emphasis: { focus: 'series' },
+        itemStyle: {
+            color: colorMap[cat] || '#94a3b8'  // 使用统一色彩
+        },
         data: pivot[cat]
     }));
 
@@ -224,8 +247,25 @@ function renderBarLineChart(data) {
 }
 
 // 3. 右侧图：紧凑微空心双环图
-function renderDonutChart(data) {
-    const chart = echarts.init(document.getElementById('nestedDonutChart'));
+function renderDonutChart(data, colorMap) {
+    const chartDom = document.getElementById('nestedDonutChart');
+    if (!chartDom) return;
+    const chart = echarts.init(chartDom);
+    // 1. 内环数据：固定赋予高质感的主题色，区分刚性与弹性
+    const innerData = (data.donut_chart.inner || []).map(item => ({
+        ...item,
+        itemStyle: {
+            color: item.name.includes('刚性') ? '#475569' : '#0284c7'
+        }
+    }));
+
+    // 2. 外环数据：按 item.name (即分类名) 精确匹配左图的分类颜色
+    const outerData = (data.donut_chart.outer || []).map(item => ({
+        ...item,
+        itemStyle: {
+            color: colorMap[item.name] || '#cbd5e1' // 与左侧完全一致的颜色
+        }
+    }));
 
     chart.setOption({
         title: {
@@ -273,7 +313,7 @@ function renderDonutChart(data) {
                     formatter: '{b}\n{d}%'
                 },
                 labelLine: { show: false },
-                data: data.donut_chart.inner
+                data: innerData
             },
             // 外环：微缝贴合
             {
@@ -299,7 +339,7 @@ function renderDonutChart(data) {
                     length: 10,
                     length2: 12
                 },
-                data: data.donut_chart.outer
+                data: outerData
             }
         ]
     });
