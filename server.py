@@ -106,22 +106,40 @@ def get_available_months():
     return months
 
 
-# 联动分析接口：支持指定月份与自定义预算（合并修正了原本重复定义的问题）
+# 联动分析接口：支持指定年份月份与自定义预算（合并修正了原本重复定义的问题）
 @app.post("/api/refresh_analysis")
 def trigger_refresh(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
     year_month: Optional[str] = Query(None),
     monthly_budget: Optional[float] = Query(2300.0),
 ):
+    # 兼容旧调用方的 year_month 参数（如 "2026-09"），拆分为年份与月份
+    if (year is None or month is None) and year_month:
+        parsed_year, parsed_month = analyze.parse_year_month_arg(year_month)
+        if year is None:
+            year = parsed_year
+        if month is None:
+            month = parsed_month
+
+    # 选定具体月份时按月份隔离缓存文件，避免 2026-09 与 2027-09 等不同年份互相覆盖
+    target_path = JSON_OUTPUT
+    label = "全部"
+    if year is not None and month is not None:
+        target_path = analyze.build_month_json_path(JSON_OUTPUT, year, month)
+        label = f"{year}-{month:02d}"
+
     data = analyze.run_analysis_from_db(
         db_path=DB_PATH,
         monthly_budget=monthly_budget,
-        json_path=JSON_OUTPUT,
-        year_month=year_month,
+        json_path=target_path,
+        year=year,
+        month=month,
     )
     if data:
         return {
             "status": "success",
-            "message": f"[{year_month or '全部'}] 分析已重新生成，预算基线: ¥{monthly_budget}",
+            "message": f"[{label}] 分析已重新生成，预算基线: ¥{monthly_budget}",
         }
     return {"status": "empty", "message": "该月份无数据或数据库为空"}
 

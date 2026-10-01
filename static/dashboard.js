@@ -15,8 +15,22 @@ function buildCategoryColorMap(allCategories) {
     return colorMap;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    fetch('expense_data.json')
+document.addEventListener('DOMContentLoaded', async () => {
+    // 按月份隔离的缓存文件：优先读取当前选中的月份（如 expense_data_2026-09.json）
+    const savedYm = localStorage.getItem('selected_year_month');
+    let dataFile = 'expense_data.json';
+    if (savedYm) {
+        dataFile = `expense_data_${savedYm}.json`;
+        // 读取前先触发一次该月份的重新核算，确保在管理页增删改后数据仍然最新
+        try {
+            const [y, m] = savedYm.split('-');
+            const budget = getCurrentBudget();
+            await fetch(`/api/refresh_analysis?year=${encodeURIComponent(y)}&month=${encodeURIComponent(m)}&monthly_budget=${budget}`, { method: 'POST' });
+        } catch (err) {
+            console.warn('月度缓存预刷新失败，尝试直接读取已有文件:', err);
+        }
+    }
+    fetch(dataFile)
         .then(response => {
             if (!response.ok) {
                 throw new Error('无法读取 expense_data.json，请确认文件路径是否正确。');
@@ -598,7 +612,11 @@ async function runAiDiagnose() {
     box.innerHTML = `<span style="color:#2563eb;">🤖 DeepSeek 正在基于本月预算、刚性支出与拿铁因子进行深度综合评估，请稍候...</span>`;
 
     try {
-        const res = await fetch('/api/ai/diagnose');
+        // 携带当前选中的月份，让后端读取对应月份的隔离缓存文件
+        const monthSelector = document.getElementById('month-selector');
+        const ym = monthSelector ? monthSelector.value : '';
+        const query = ym ? `?year_month=${encodeURIComponent(ym)}` : '';
+        const res = await fetch(`/api/ai/diagnose${query}`);
         const data = await res.json();
         
         if (data.advice) {
@@ -672,8 +690,10 @@ async function initMonthSelector() {
 
 // 切换月份触发重新计算并刷新图表
 async function changeMonth(selectedYm) {
-    await fetch(`/api/refresh_analysis?year_month=${selectedYm}`, { method: 'POST' });
-    // 重新拉取 static/expense_data.json 渲染 ECharts（调用你原有的渲染总函数）
+    localStorage.setItem('selected_year_month', selectedYm);
+    const [y, m] = selectedYm.split('-');
+    await fetch(`/api/refresh_analysis?year=${encodeURIComponent(y)}&month=${encodeURIComponent(m)}&monthly_budget=${getCurrentBudget()}`, { method: 'POST' });
+    // 重新拉取按月份隔离的缓存文件渲染 ECharts
     location.reload();
 }
 
@@ -820,7 +840,11 @@ async function refreshWithCurrentParams() {
     }
 
     const params = new URLSearchParams();
-    if (ym) params.append('year_month', ym);
+    if (ym) {
+        const [y, m] = ym.split('-');
+        params.append('year', y);
+        params.append('month', m);
+    }
     params.append('monthly_budget', budget);
 
     await fetch(`/api/refresh_analysis?${params.toString()}`, { method: 'POST' });

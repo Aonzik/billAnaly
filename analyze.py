@@ -1,16 +1,17 @@
-# analyze.py
+# analyze.py —— 直接对 bills.db 中的指定条目进行分析（无 pandas 依赖）
 import calendar
 import json
 import os
-import yaml
 import re
+import sys
 import sqlite3
 import unicodedata
-import jieba
 from collections import defaultdict
+
+import yaml
+import jieba
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 # 设置 Matplotlib 中文字体支持
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial Unicode MS"]
@@ -21,7 +22,7 @@ def load_system_config(config_file: str = "config.yaml") -> dict:
     """安全读取 YAML 配置文件，带兜底保障"""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(base_dir, config_file)
-    
+
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
@@ -48,12 +49,53 @@ def pad_chinese(text, width):
     padding = max(0, width - disp_width)
     return text + " " * padding
 
+
+def parse_year_month_from_date(raw_str):
+    """从完整日期字符串解析 (year, month)，解析失败返回 (None, None)。
+    支持 2026-09-01 / 2026-9-1 / 26-09-01 / 2026/9/1 / 20260901 / 260901 / 0901 等格式。"""
+    raw = str(raw_str).strip()
+    sep_match = re.search(r"^(\d{2,4})[-/.]([0-1]?\d)[-/.]([0-3]?\d)", raw)
+    if sep_match:
+        year = int(sep_match.group(1))
+        if year < 100:
+            year += 2000
+        return year, int(sep_match.group(2))
+    if raw.isdigit():
+        if len(raw) == 8:      # 20260901 -> 年 2026, 月 09
+            return int(raw[:4]), int(raw[4:6])
+        if len(raw) == 6:      # 260901   -> 年 2026, 月 09
+            return 2000 + int(raw[:2]), int(raw[2:4])
+        if len(raw) == 4:      # 0901     -> 只有月日，年份未知
+            return None, int(raw[:2])
+    return None, None
+
+
+def parse_year_month_arg(value):
+    """解析 '2026-09' / '2026-9' / '2026/09' / '202609' 形式的年月参数为 (year, month)，失败返回 (None, None)"""
+    raw = str(value).strip()
+    m = re.match(r"^(\d{2,4})[-/](\d{1,2})$", raw)
+    if m:
+        year = int(m.group(1))
+        if year < 100:
+            year += 2000
+        return year, int(m.group(2))
+    if raw.isdigit() and len(raw) == 6:   # 202609
+        return int(raw[:4]), int(raw[4:6])
+    return None, None
+
+
+def build_month_json_path(base_path, year, month):
+    """按月份隔离的 JSON 缓存路径，如 static/expense_data.json -> static/expense_data_2026-09.json"""
+    directory = os.path.dirname(base_path)
+    name = f"expense_data_{int(year)}-{int(month):02d}.json"
+    return os.path.join(directory, name) if directory else name
+
 # =========================================================================
 # 词云清洗规则与统计引擎
 # =========================================================================
 # 过滤助词、交易通道、无实际商品特征的杂词
 WORDCLOUD_STOP_WORDS = {
-    "微信", "支付宝", "支付", "支出", "账单", "退款", "购买", "消费", 
+    "微信", "支付宝", "支付", "支出", "账单", "退款", "购买", "消费",
     "商品", "代金券", "优惠券", "红包", "其他", "备注", "单人", "这个"
 }
 
@@ -70,14 +112,10 @@ def clean_product_name(text: str) -> str:
     text = re.sub(r"[\(（].*?[\)）]", " ", text)
     return text.strip()
 
-def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame = None, top_n: int = 80) -> dict:
+def generate_wordcloud_data(db_path: str = "bills.db", top_n: int = 80) -> dict:
     """提取所有月份的实际支出(EX)，清洗后分词并生成频次与金额双加权数据"""
     rows = []
-    if df_source is not None:
-        # 兼容直接传入 DataFrame（如离线运行 Excel）
-        ex_df = df_source[df_source["交易类型"] == "EX"]
-        rows = ex_df[["品名", "实际金额"]].dropna().values.tolist()
-    elif os.path.exists(db_path):
+    if os.path.exists(db_path):
         # 默认从 bills.db 全量读取跨月份历史
         conn = sqlite3.connect(db_path)
         try:
@@ -105,7 +143,7 @@ def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame =
         cleaned_text = clean_product_name(item_name)
         if not cleaned_text:
             continue
-        
+
         amt = float(amount or 0.0)
         tokens = jieba.lcut(cleaned_text)
 
@@ -139,189 +177,185 @@ def generate_wordcloud_data(db_path: str = "bills.db", df_source: pd.DataFrame =
     return {"by_freq": by_freq_data, "by_amount": by_amount_data}
 
 # =========================================================================
-# 1. 核心计算层（支持传入 file_path 或 外部 df）
+# 1. 核心计算层（直接消费从 bills.db 查询出的条目列表）
 # =========================================================================
-def process_expense_data(
-    file_path=None, df=None, monthly_budget=2300, current_day=None
-):
+def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None, month=None):
     """
-    清洗并计算账单数据。支持通过 file_path (Excel) 或 直接传入 df (从 SQLite 查询)。
+    清洗并计算账单数据。rows 为从 bills.db 查询出的条目列表（list[dict]）。
+    year / month 用于跨年份准确计算当月天数；缺省时自动从首条记录日期解析。
     """
-    if df is None:
-        if file_path is None:
-            raise ValueError("必须提供 file_path 或 df 之一")
-        df = pd.read_excel(file_path, dtype={"日期": str, "时间": str})
-    else:
-        df = df.copy()
+    if rows is None:
+        raise ValueError("必须提供数据库条目列表 rows")
 
-    df.columns = df.columns.str.strip()
-    text_cols = ["交易类型", "分类", "品名", "支付账户", "目标账户", "结算状态"]
-    for col in text_cols:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+    recs = []
+    for row in rows:
+        rec = {
+            "日期": str(row.get("日期") or "").strip(),
+            "时间": str(row.get("时间") or "").strip(),
+            "交易类型": str(row.get("交易类型") or "").strip(),
+            "分类": str(row.get("分类") or "").strip(),
+            "品名": str(row.get("品名") or "").strip(),
+            "支付账户": str(row.get("支付账户") or "").strip(),
+            "目标账户": str(row.get("目标账户") or "").strip(),
+            "结算状态": str(row.get("结算状态") or "").strip(),
+        }
+        try:
+            rec["实际金额"] = float(row.get("实际金额") or 0.0)
+        except (TypeError, ValueError):
+            rec["实际金额"] = 0.0
+        rec["件数"] = extract_item_quantity(rec["品名"])
+        recs.append(rec)
 
-    df["实际金额"] = pd.to_numeric(df["实际金额"], errors="coerce").fillna(0)
-    df["件数"] = df["品名"].apply(extract_item_quantity)
+    def is_accident(r):
+        """识别“意外”非日常消费事件"""
+        return ("意外" in r["交易类型"]) or bool(re.search(r"赔偿|意外", r["分类"]))
 
-    # 识别“意外”非日常消费事件
-    accident_mask = df["交易类型"].str.contains("意外") | df["分类"].str.contains(
-        "赔偿|意外"
-    )
-
-    # 识别房租
-    rent_condition = (
-        df["分类"].str.contains("房租")
-        | df["品名"].str.contains("房租")
-        | (df["分类"].str.contains("住房|居家") & df["品名"].str.contains("押金"))
-    )
-    rent_total = float(
-        df[(df["交易类型"] == "EX") & rent_condition]["实际金额"].sum()
-    )
+    def is_rent(r):
+        """识别房租"""
+        return (
+            ("房租" in r["分类"])
+            or ("房租" in r["品名"])
+            or (("住房" in r["分类"] or "居家" in r["分类"]) and ("押金" in r["品名"]))
+        )
 
     # (0) 总览数据
-        # 1. 按交易类型汇总金额 (严格基于用户定义: AR=垫付, AP=收回, EX=支出, IN=收入)
-    type_sums = df.groupby("交易类型")["实际金额"].sum().to_dict()
-    ex_val = float(type_sums.get("EX", 0.0))  # 支出
-    in_val = float(type_sums.get("IN", 0.0))  # 收入
-    ar_val = float(type_sums.get("AR", 0.0))  # 垫付
-    ap_val = float(type_sums.get("AP", 0.0))  # 收回
-        # 2. 按照公式计算三大核心财务指标
+    # 1. 按交易类型汇总金额 (严格基于用户定义: AR=垫付, AP=收回, EX=支出, IN=收入)
+    type_sums = defaultdict(float)
+    for r in recs:
+        type_sums[r["交易类型"]] += r["实际金额"]
+    ex_val = type_sums.get("EX", 0.0)  # 支出
+    in_val = type_sums.get("IN", 0.0)  # 收入
+    ar_val = type_sums.get("AR", 0.0)  # 垫付
+    ap_val = type_sums.get("AP", 0.0)  # 收回
+    # 2. 按照公式计算三大核心财务指标
     monthly_total_expense = round(ex_val + ar_val - ap_val, 2)  # SUM(EX + AR - AP)
     monthly_net_growth = round(in_val - ex_val - ar_val + ap_val, 2)  # SUM(IN - EX - AR + AP)
     pending_recovery = round(ar_val - ap_val, 2)  # SUM(AR - AP)
 
+    rent_total = sum(
+        r["实际金额"] for r in recs if r["交易类型"] == "EX" and is_rent(r)
+    )
+
     # (1) 花呗
-    hb_spent = float(df[df["支付账户"] == "HB"]["实际金额"].sum())
-    hb_repaid = float(
-        df[(df["交易类型"] == "TR") & (df["品名"].str.contains("花呗还款"))][
-            "实际金额"
-        ].sum()
+    hb_spent = sum(r["实际金额"] for r in recs if r["支付账户"] == "HB")
+    hb_repaid = sum(
+        r["实际金额"]
+        for r in recs
+        if r["交易类型"] == "TR" and "花呗还款" in r["品名"]
     )
     hb_need_pay = hb_spent - hb_repaid
 
     # (2) 意外损益
-    accident_df = df[accident_mask].copy()
-    accident_in = 0.0
-    accident_out = 0.0
-    if not accident_df.empty:
-        accident_in = float(
-            accident_df[accident_df["交易类型"] == "IN"]["实际金额"].sum()
-        )
-        accident_out = float(
-            accident_df[accident_df["交易类型"] == "EX"]["实际金额"].sum()
-        )
+    accident_rows = [r for r in recs if is_accident(r)]
+    accident_in = sum(
+        r["实际金额"] for r in accident_rows if r["交易类型"] == "IN"
+    )
+    accident_out = sum(
+        r["实际金额"] for r in accident_rows if r["交易类型"] == "EX"
+    )
 
     # (3) 拿铁因子
-    regular_ex = df[(df["交易类型"] == "EX") & (~accident_mask)].copy()
-    latte_df = regular_ex[regular_ex["分类"] == "饮食*"].copy()
+    regular_ex = [r for r in recs if r["交易类型"] == "EX" and not is_accident(r)]
+    latte_rows = [r for r in regular_ex if r["分类"] == "饮食*"]
 
     drink_pattern = r"奶茶|茶|咖啡|可乐|雪碧|水|冰城|拿铁|饮|乳|蜜雪|库迪"
-    drinks = latte_df[
-        latte_df["品名"].str.contains(drink_pattern, regex=True, case=False)
+    drinks = [
+        r for r in latte_rows if re.search(drink_pattern, r["品名"], re.IGNORECASE)
     ]
-    snacks = latte_df[
-        ~latte_df["品名"].str.contains(drink_pattern, regex=True, case=False)
+    snacks = [
+        r for r in latte_rows if not re.search(drink_pattern, r["品名"], re.IGNORECASE)
     ]
 
     latte_stats = {
-        "count": len(latte_df),
-        "items": int(latte_df["件数"].fillna(0).sum()),
-        "cost": float(latte_df["实际金额"].sum()),
+        "count": len(latte_rows),
+        "items": sum(r["件数"] for r in latte_rows),
+        "cost": sum(r["实际金额"] for r in latte_rows),
         "drinks_count": len(drinks),
-        "drinks_items": int(drinks["件数"].fillna(0).sum()),
-        "drinks_cost": float(drinks["实际金额"].sum()),
+        "drinks_items": sum(r["件数"] for r in drinks),
+        "drinks_cost": sum(r["实际金额"] for r in drinks),
         "snacks_count": len(snacks),
-        "snacks_items": int(snacks["件数"].fillna(0).sum()),
-        "snacks_cost": float(snacks["实际金额"].sum()),
+        "snacks_items": sum(r["件数"] for r in snacks),
+        "snacks_cost": sum(r["实际金额"] for r in snacks),
     }
 
     # (4) 商户复购榜
-    regular_ex["结账单号"] = regular_ex["日期"] + "_" + regular_ex["时间"]
     # 读取配置文件中的剔除列表，若读取失败则使用默认值兜底
     config = load_system_config()
     default_non_merchants = ["HB", "VX", "AL", "BK", "TC", "腾讯"]
     non_merchants = config.get("non_merchants", default_non_merchants)
     # 确保比较时做去空白处理
     non_merchants = {str(item).strip() for item in non_merchants}
-    merchant_filter = ~regular_ex["目标账户"].isin(non_merchants)
 
-    merchant_stats_df = (
-        regular_ex[merchant_filter]
-        .groupby("目标账户")
-        .agg(
-            消费次数=("结账单号", "nunique"),
-            累计金额=("实际金额", "sum"),
-            购买件数=("件数", "sum"),
+    merchant_map = {}
+    for r in regular_ex:
+        if r["目标账户"] in non_merchants:
+            continue
+        m = merchant_map.setdefault(
+            r["目标账户"], {"orders": set(), "amount": 0.0, "items": 0}
         )
-        .sort_values(by=["消费次数", "累计金额"], ascending=False)
-        .head(5)
-    )
+        m["orders"].add(f"{r['日期']}_{r['时间']}")
+        m["amount"] += r["实际金额"]
+        m["items"] += r["件数"]
+
+    merchant_stats = sorted(
+        merchant_map.items(),
+        key=lambda kv: (-len(kv[1]["orders"]), -kv[1]["amount"]),
+    )[:5]
 
     top_merchants = [
         {
             "name": name,
-            "count": int(row["消费次数"]),
-            "amount": float(row["累计金额"]),
-            "items": int(row["购买件数"]),
+            "count": len(st["orders"]),
+            "amount": st["amount"],
+            "items": st["items"],
         }
-        for name, row in merchant_stats_df.iterrows()
+        for name, st in merchant_stats
     ]
 
     # (5) 动态预算：每日净支出计算 (EX + AR - AP)
-    pure_daily_ex = df[
-        (df["交易类型"] == "EX") & (~rent_condition) & (~accident_mask)
-    ]
-    pure_daily_ex_sum = pure_daily_ex.groupby("日期")["实际金额"].sum()
-
-    pure_daily_ar = df[(df["交易类型"] == "AR") & (~rent_condition) & (~accident_mask)]
-    pure_daily_ar_sum = pure_daily_ar.groupby("日期")["实际金额"].sum()
-
-    regular_ap = df[
-        (df["交易类型"] == "AP") & (~rent_condition) & (~accident_mask)
-    ]
-    regular_ap_sum = regular_ap.groupby("日期")["实际金额"].sum()
+    daily_ex = defaultdict(float)
+    daily_ar = defaultdict(float)
+    daily_ap = defaultdict(float)
+    for r in recs:
+        if is_rent(r) or is_accident(r):
+            continue
+        if r["交易类型"] == "EX":
+            daily_ex[r["日期"]] += r["实际金额"]
+        elif r["交易类型"] == "AR":
+            daily_ar[r["日期"]] += r["实际金额"]
+        elif r["交易类型"] == "AP":
+            daily_ap[r["日期"]] += r["实际金额"]
 
     # 按照严格财务对冲公式：EX + AR - AP
-    daily_net_series = (
-        pure_daily_ex_sum.add(pure_daily_ar_sum, fill_value=0)
-        .subtract(regular_ap_sum, fill_value=0)
-    )
+    all_dates = sorted(set(daily_ex) | set(daily_ar) | set(daily_ap))
+    daily_net = [(d, daily_ex[d] + daily_ar[d] - daily_ap[d]) for d in all_dates]
 
-    daily_net_df = (
-        daily_net_series
-        .reset_index()
-        .rename(columns={"实际金额": "净支出"})
-        .sort_values("日期")
-        .reset_index(drop=True)
-    )
+    # 确定核算年份与月份：显式传入优先，否则沿用首条记录的日期（跨年份安全）
+    if year is None or month is None:
+        parsed_year, parsed_month = (None, None)
+        if recs and recs[0]["日期"]:
+            parsed_year, parsed_month = parse_year_month_from_date(recs[0]["日期"])
+        if year is None:
+            year = parsed_year
+        if month is None:
+            month = parsed_month
+    if year is None:
+        import datetime
 
-    # 提取月份
-    month_str = "09"
-    if len(df) > 0 and pd.notna(df["日期"].iloc[0]):
-        raw_str = str(df["日期"].iloc[0]).strip()
-        # 针对带分隔符的格式（如 2026-09-01, 2026-9-1, 26-09-01, 2026/9/1 等）
-        # 匹配 年-月-日 中的 "月"
-        sep_match = re.search(r"^\d{2,4}[-/.]([0-1]?\d)[-/.]([0-3]?\d)", raw_str)
-        # 针对纯数字紧凑格式（如 20260901, 260901, 0901）
-        if sep_match:
-            m = int(sep_match.group(1))
-            month_str = f"{m:02d}"
-        elif raw_str.isdigit():
-            if len(raw_str) == 8:      # 20260901 -> 取第 5-6 位
-                month_str = raw_str[4:6]
-            elif len(raw_str) == 6:    # 260901   -> 取第 3-4 位
-                month_str = raw_str[2:4]
-            elif len(raw_str) == 4:    # 0901     -> 取第 1-2 位
-                month_str = raw_str[:2]
+        year = datetime.date.today().year
+    if month is None:
+        month = 9
 
-    days_in_month = calendar.monthrange(2026, int(month_str))[1]
+    days_in_month = calendar.monthrange(int(year), int(month))[1]
 
     if current_day is None:
-        day_series = (
-            df["日期"].astype(str).str.extract(r"(\d{1,2})$")[0].dropna()
-        )
-        if not day_series.empty:
-            current_day = int(day_series.astype(int).max())
+        day_nums = []
+        for r in recs:
+            match = re.search(r"(\d{1,2})$", r["日期"])
+            if match:
+                day_nums.append(int(match.group(1)))
+        if day_nums:
+            current_day = max(day_nums)
         else:
             import datetime
 
@@ -329,36 +363,52 @@ def process_expense_data(
 
     daily_total_budget = max(0, monthly_budget - rent_total)
     safe_daily_baseline = daily_total_budget / days_in_month
-    month_net_spent_so_far = float(daily_net_df["净支出"].sum())
+    month_net_spent_so_far = sum(v for _, v in daily_net)
     remaining_days = max(1, days_in_month - current_day + 1)
     dynamic_safe_budget = max(
         0, (daily_total_budget - month_net_spent_so_far) / remaining_days
     )
 
     # 堆叠透视表
-    pivot_amount = pure_daily_ex.pivot_table(
-        index="日期", columns="分类", values="实际金额", aggfunc="sum", fill_value=0
-    )
-    pivot_amount = pivot_amount.reindex(daily_net_df["日期"]).fillna(0)
+    pivot_map = defaultdict(lambda: defaultdict(float))
+    for r in recs:
+        if r["交易类型"] == "EX" and not is_rent(r) and not is_accident(r):
+            pivot_map[r["日期"]][r["分类"]] += r["实际金额"]
+    categories = sorted({cat for day_map in pivot_map.values() for cat in day_map})
+    pivot_dates = [d for d, _ in daily_net]
+    pivot_values = [
+        [pivot_map[d].get(cat, 0.0) for cat in categories] for d in pivot_dates
+    ]
 
     # 双环图
     fixed_pattern = r"房租|分期|月卡|电费|提现手续|宽带|话费"
 
-    def mark_rigidity(row):
-        text = f"{row['分类']}_{row['品名']}"
+    def mark_rigidity(r):
+        text = f"{r['分类']}_{r['品名']}"
         return (
             "刚性固定支出"
             if re.search(fixed_pattern, text, re.IGNORECASE)
             else "弹性自由支配"
         )
 
-    regular_ex["支出属性"] = regular_ex.apply(mark_rigidity, axis=1)
-    inner_series = regular_ex.groupby("支出属性")["实际金额"].sum()
-    outer_series = (
-        regular_ex.groupby(["支出属性", "分类"])["实际金额"]
-        .sum()
-        .loc[inner_series.index]
-    )
+    inner_map = defaultdict(float)
+    outer_map = defaultdict(float)
+    for r in regular_ex:
+        attr = mark_rigidity(r)
+        inner_map[attr] += r["实际金额"]
+        outer_map[(attr, r["分类"])] += r["实际金额"]
+
+    inner_labels = sorted(inner_map)
+    inner_values = [inner_map[k] for k in inner_labels]
+    outer_pairs = []
+    outer_values = []
+    for attr in inner_labels:
+        attr_cats = sorted({cat for (a, cat) in outer_map if a == attr})
+        for cat in attr_cats:
+            outer_pairs.append((attr, cat))
+            outer_values.append(outer_map[(attr, cat)])
+
+    all_categories = sorted({r["分类"] for r in regular_ex})
 
     data_bundle = {
         "overview": {
@@ -391,32 +441,39 @@ def process_expense_data(
             "current_day": current_day,
         },
         "daily_trend": {
-            "dates": daily_net_df["日期"].tolist(),
+            "dates": [d for d, _ in daily_net],
             "net_expenses": [
-                round(x, 2) for x in daily_net_df["净支出"].tolist()
+                round(v, 2) for _, v in daily_net
             ],
-            "categories": pivot_amount.columns.tolist(),
+            "categories": categories,
             "pivot_data": {
-                col: [round(v, 2) for v in pivot_amount[col].tolist()]
-                for col in pivot_amount.columns
+                cat: [round(row[ci], 2) for row in pivot_values]
+                for ci, cat in enumerate(categories)
             },
         },
         "donut_chart": {
             "inner": [
                 {"name": name, "value": round(float(val), 2)}
-                for name, val in inner_series.items()
+                for name, val in zip(inner_labels, inner_values)
             ],
             "outer": [
                 {"name": cat, "value": round(float(val), 2), "parent": attr}
-                for (attr, cat), val in outer_series.items()
+                for (attr, cat), val in zip(outer_pairs, outer_values)
             ],
         },
         "_raw": {
-            "pivot_amount": pivot_amount,
-            "daily_net": daily_net_df,
-            "inner_data": inner_series,
-            "outer_data": outer_series,
-            "all_categories": sorted(regular_ex["分类"].unique()),
+            "pivot_amount": {
+                "dates": pivot_dates,
+                "categories": categories,
+                "values": pivot_values,
+            },
+            "daily_net": {
+                "dates": [d for d, _ in daily_net],
+                "values": [v for _, v in daily_net],
+            },
+            "inner_data": {"labels": inner_labels, "values": inner_values},
+            "outer_data": {"labels": outer_pairs, "values": outer_values},
+            "all_categories": all_categories,
         },
     }
     return data_bundle
@@ -471,10 +528,16 @@ def print_analysis_report(data):
 
 def render_matplotlib_charts(data):
     raw = data["_raw"]
-    pivot_amount = raw["pivot_amount"]
-    daily_net = raw["daily_net"]
-    inner_data = raw["inner_data"]
-    outer_data = raw["outer_data"]
+    pivot = raw["pivot_amount"]
+    pivot_dates = pivot["dates"]
+    pivot_categories = pivot["categories"]
+    pivot_values = pivot["values"]
+    daily_dates = raw["daily_net"]["dates"]
+    daily_values = raw["daily_net"]["values"]
+    inner_labels = raw["inner_data"]["labels"]
+    inner_values = raw["inner_data"]["values"]
+    outer_pairs = raw["outer_data"]["labels"]
+    outer_values = raw["outer_data"]["values"]
     all_categories = raw["all_categories"]
     safe_daily_baseline = data["budget"]["safe_daily_baseline"]
     dynamic_safe_budget = data["budget"]["dynamic_safe_budget"]
@@ -488,21 +551,26 @@ def render_matplotlib_charts(data):
 
     fig, axes = plt.subplots(1, 2, figsize=(21, 7.5))
     ax = axes[0]
-    left_bar_colors = [category_color_map[col] for col in pivot_amount.columns]
-    pivot_amount.plot(
-        kind="bar",
-        stacked=True,
-        ax=ax,
-        color=left_bar_colors,
-        width=0.6,
-        alpha=0.82,
-        edgecolor="white",
-        linewidth=0.8,
-    )
-    x_positions = np.arange(len(daily_net))
+    left_bar_colors = [category_color_map[col] for col in pivot_categories]
+    x_positions = np.arange(len(pivot_dates))
+    bottom = np.zeros(len(pivot_dates))
+    for ci, cat in enumerate(pivot_categories):
+        vals = [row[ci] for row in pivot_values]
+        ax.bar(
+            x_positions,
+            vals,
+            bottom=bottom,
+            color=left_bar_colors[ci],
+            width=0.6,
+            alpha=0.82,
+            edgecolor="white",
+            linewidth=0.8,
+            label=cat,
+        )
+        bottom = bottom + np.asarray(vals, dtype=float)
     (line_net,) = ax.plot(
         x_positions,
-        daily_net["净支出"],
+        daily_values,
         color="#c0392b",
         linewidth=2.5,
         marker="o",
@@ -516,7 +584,7 @@ def render_matplotlib_charts(data):
         linewidth=1.8,
         zorder=4,
     )
-    for i, val in enumerate(daily_net["净支出"]):
+    for i, val in enumerate(daily_values):
         ax.annotate(
             f"¥{val:.1f}",
             (x_positions[i], val),
@@ -537,7 +605,10 @@ def render_matplotlib_charts(data):
     ax.set_xlabel("日期", fontsize=11)
     ax.tick_params(axis="x", rotation=45)
     ax.grid(axis="y", linestyle=":", alpha=0.5)
-    ax.set_ylim(0, max(daily_net["净支出"].max(), safe_daily_baseline) * 1.22)
+    y_ceiling = max(
+        (max(daily_values) if daily_values else 0.0), safe_daily_baseline
+    ) * 1.22
+    ax.set_ylim(0, y_ceiling)
     ax.set_title(
         f"逐日日常支出分类构成与净支出走势\n[今日起建议日均额度: ¥{dynamic_safe_budget:.1f}/天]",
         fontsize=12,
@@ -545,7 +616,7 @@ def render_matplotlib_charts(data):
         pad=15,
     )
     bar_handles, bar_labels = ax.get_legend_handles_labels()
-    cat_len = len(pivot_amount.columns)
+    cat_len = len(pivot_categories)
     ax.legend(
         handles=bar_handles[:cat_len] + [line_net, line_safe],
         labels=bar_labels[:cat_len]
@@ -558,9 +629,9 @@ def render_matplotlib_charts(data):
     )
 
     axes[1].pie(
-        inner_data,
+        inner_values,
         radius=0.7,
-        labels=inner_data.index,
+        labels=inner_labels,
         labeldistance=0.35,
         autopct="%1.1f%%",
         pctdistance=0.75,
@@ -568,10 +639,10 @@ def render_matplotlib_charts(data):
         wedgeprops=dict(width=0.35, edgecolor="white", linewidth=1.5),
         textprops=dict(fontweight="bold", fontsize=10),
     )
-    outer_labels = [idx[1] for idx in outer_data.index]
+    outer_labels = [pair[1] for pair in outer_pairs]
     right_outer_colors = [category_color_map[cat] for cat in outer_labels]
     axes[1].pie(
-        outer_data,
+        outer_values,
         radius=1.05,
         labels=outer_labels,
         labeldistance=1.15,
@@ -595,8 +666,6 @@ def export_to_json(data, output_json_path="expense_data.json"):
     chart_payload = {k: v for k, v in data.items() if k != "_raw"}
     # 增加万能兜底转换函数
     def default_serializer(obj):
-        if isinstance(obj, (pd.DataFrame, pd.Series)):
-            return obj.to_dict()
         if isinstance(obj, (np.integer, np.int64, np.int32)):
             return int(obj)
         if isinstance(obj, (np.floating, np.float64, np.float32)):
@@ -615,21 +684,41 @@ def run_analysis_from_db(
     monthly_budget=2800,
     json_path=None,
     current_day=None,
-    year_month=None,
+    year=None,
+    month=None,
 ):
-    """从 SQLite 数据库中读取指定月份的数据并刷新 JSON"""
+    """从 SQLite 数据库中读取指定年/月的数据并刷新 JSON；year/month 均缺省时分析全量条目"""
     conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
     sql = "SELECT * FROM expenses"
-    if year_month:
-        sql += f" WHERE 日期 LIKE '{year_month}%'"
-    df = pd.read_sql_query(sql, conn)
+    conditions = []
+    params = []
+    if year is not None:
+        if month is not None:
+            conditions.append("日期 LIKE ?")
+            params.append(f"{int(year)}-{int(month):02d}%")
+        else:
+            conditions.append("日期 LIKE ?")
+            params.append(f"{int(year)}-")
+    elif month is not None:
+        conditions.append("substr(日期, 6, 2) = ?")
+        params.append(f"{int(month):02d}")
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    cursor = conn.cursor()
+    cursor.execute(sql, params)
+    rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
-    if df.empty:
+    if not rows:
         return None
 
     data = process_expense_data(
-        df=df, monthly_budget=monthly_budget, current_day=current_day
+        rows=rows,
+        monthly_budget=monthly_budget,
+        current_day=current_day,
+        year=year,
+        month=month,
     )
     data["wordcloud"] = generate_wordcloud_data(db_path=db_path)
     if json_path:
@@ -638,19 +727,25 @@ def run_analysis_from_db(
 
 
 def analyze_expenses(
-    file_path=None,
-    df=None,
+    db_path="bills.db",
+    year=None,
+    month=None,
     monthly_budget=2800,
     current_day=None,
     mode="all",
     json_path="expense_data.json",
 ):
-    data = process_expense_data(
-        file_path=file_path,
-        df=df,
+    data = run_analysis_from_db(
+        db_path=db_path,
         monthly_budget=monthly_budget,
+        json_path=None,
         current_day=current_day,
+        year=year,
+        month=month,
     )
+    if data is None:
+        print("[Warning] bills.db 中无匹配条目（或数据为空），无法分析。")
+        return None
     if mode in ["all", "console"]:
         print_analysis_report(data)
     if mode in ["all", "web"]:
@@ -661,13 +756,24 @@ def analyze_expenses(
 
 
 if __name__ == "__main__":
-    excel_file = "D:\\files\\账单\\2609.xlsx"
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    db_file = os.path.join(current_dir, "bills.db")
     target_json_path = os.path.join(current_dir, "static", "expense_data.json")
 
-    # 单独运行 analyze.py 依然完全可用
+    # 单独运行 analyze.py 依然完全可用；可选传入年月参数，如 python analyze.py 2026-09
+    target_year = target_month = None
+    if len(sys.argv) > 1:
+        target_year, target_month = parse_year_month_arg(sys.argv[1])
+        if target_year is not None and target_month is not None:
+            # 指定月份时按月份隔离缓存文件，避免与其它月份互相覆盖
+            target_json_path = build_month_json_path(
+                target_json_path, target_year, target_month
+            )
+
     analyze_expenses(
-        file_path=excel_file,
+        db_path=db_file,
+        year=target_year,
+        month=target_month,
         monthly_budget=2800,
         mode="all",
         json_path=target_json_path,

@@ -105,11 +105,18 @@ def format_records_to_text(rows: list[dict]) -> str:
 # 功能 1：消费习惯诊断与财务私教建议（dashboard 悬浮球）
 # =========================================================================
 @ai_router.get("/diagnose")
-def analyze_financial_habits():
+def analyze_financial_habits(year_month: Optional[str] = None):
     if not client:
         return {"advice": "❌ 后端错误：OpenAI 客户端未初始化，请检查 API Key 配置。"}
 
+    # 指定月份时优先读取该月份的隔离缓存（如 expense_data_2026-09.json）
     json_path = os.path.join(BASE_DIR, "static", "expense_data.json")
+    if year_month and year_month.strip():
+        month_path = os.path.join(
+            BASE_DIR, "static", f"expense_data_{year_month.strip()}.json"
+        )
+        if os.path.exists(month_path):
+            json_path = month_path
     if not os.path.exists(json_path):
         alt_path = os.path.join(BASE_DIR, "expense_data.json")
         if os.path.exists(alt_path):

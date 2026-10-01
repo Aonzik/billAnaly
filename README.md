@@ -193,7 +193,8 @@ billAnaly/
 │   ├── manager.html          # 流水数据管理与查询后台页面
 │   ├── manager.js            # 流水多维筛选、行内实时编辑、另存为导出逻辑
 │   ├── style.css             # 响应式全局界面样式与卡片网格布局
-│   ├── expense_data.json     # 中间态账单分析聚合缓存文件
+│   ├── expense_data.json     # 全量账单分析聚合缓存（未指定月份时使用）
+│   ├── expense_data_YYYY-MM.json  # 按月份隔离的账单分析聚合缓存（如 expense_data_2026-09.json）
 │   └── js/                   # 离线前端核心依赖库 (ECharts, Marked, WordCloud)
 ├── quickstart.bat            # Windows 一键快速配置虚拟环境并启动
 ├── quickstart.command        # macOS 一键快速配置虚拟环境并启动
@@ -327,12 +328,12 @@ ai_tasks:
 | 请求方法 | 端点 URL | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/months` | 获取数据库中已有记录的所有有效核算月份列表 |
-| `POST` | `/api/refresh_analysis` | 接收 `year_month` 与 `monthly_budget`，触发重新核算并更新数据缓存 |
+| `POST` | `/api/refresh_analysis` | 接收 `year`、`month` 与 `monthly_budget`（兼容旧参数 `year_month`），触发重新核算，并按月份写入隔离缓存 `expense_data_YYYY-MM.json` |
 | `GET` | `/api/wordcloud` | 获取全量支出品名的词云统计数据，支持按频次与金额双维度加权计算（默认提取 Top 80 高频高额热词） |
 | `GET` | `/api/system_config` | 获取 `config.yaml` 中配置的默认预算与基础配置 |
 | `GET` | `/api/db/expenses` | 多条件检索流水明细（支持排序、区间与分页） |
 | `GET` | `/api/db/export_excel` | 接收筛选条件，以二进制流形式导出 `.xlsx` Excel 文件 |
-| `GET` | `/api/ai/diagnose` | 读取 YAML 模板并调优，生成当前月份核心指标体检评估 |
+| `GET` | `/api/ai/diagnose` | 读取 YAML 模板并调优，生成当前月份核心指标体检评估（支持 `year_month` 参数读取对应月份缓存） |
 | `GET` | `/api/ai/deep_read` | 调取选定月份的逐笔全量流水，输出行为学审计深度报告 |
 | `POST` | `/api/ai/chat` | 接收自然语言提问文本，检索近 200 条时序流水后由大模型作答 |
 
