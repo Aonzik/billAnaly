@@ -553,8 +553,31 @@ window.switchWordCloudMode = function(isAmountChecked) {
     renderWordCloudChart(currentWordCloudMode);
 };
 
+// 计算当前所选月份的起止日期（如 2026-09 -> 2026-09-01 ~ 2026-09-30）
+function getSelectedMonthRange() {
+    const monthSelector = document.getElementById('month-selector');
+    const ym = (monthSelector && monthSelector.value) ? monthSelector.value : (localStorage.getItem('selected_year_month') || '');
+    if (!ym) return null;
+    const parts = ym.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (!y || !m) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    const lastDay = new Date(y, m, 0).getDate(); // 当月最后一天（自动处理大小月与闰年）
+    return { start_date: `${y}-${pad(m)}-01`, end_date: `${y}-${pad(m)}-${pad(lastDay)}` };
+}
+
 // 通用跳转至管理后台并携带筛选参数
 function jumpToManager(filters = {}) {
+    // 未指定任何日期约束时，自动附带当前所选月份的起止日期
+    // （金额堆叠图点击会传入具体 date，本身已带日期信息，无需附加）
+    if (!filters.date && !filters.start_date && !filters.end_date) {
+        const range = getSelectedMonthRange();
+        if (range) {
+            filters = { ...range, ...filters };
+        }
+    }
+
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
         if (value !== undefined && value !== null && value !== '') {

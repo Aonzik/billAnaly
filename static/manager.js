@@ -119,13 +119,26 @@ function applyUrlFilterParams() {
     let hasFilter = false;
 
     // 1. 日期联动：对齐真实的 filter-start 和 filter-end ID
-    const dateVal = urlParams.get('date') || urlParams.get('start_date');
+    //    支持单日精确筛选 date（金额堆叠图跳转），以及起止区间 start_date + end_date（按月份跳转）
+    const startInput = document.getElementById('filter-start') || document.getElementById('filter-start-date');
+    const endInput = document.getElementById('filter-end') || document.getElementById('filter-end-date');
+    const dateVal = urlParams.get('date');
+    const startVal = urlParams.get('start_date');
+    const endVal = urlParams.get('end_date');
     if (dateVal) {
-        const startInput = document.getElementById('filter-start') || document.getElementById('filter-start-date');
-        const endInput = document.getElementById('filter-end') || document.getElementById('filter-end-date');
+        // 单日筛选：起止日期同设为该日
         if (startInput) startInput.value = dateVal;
         if (endInput) endInput.value = dateVal;
         hasFilter = true;
+    } else {
+        if (startVal && startInput) {
+            startInput.value = startVal;
+            hasFilter = true;
+        }
+        if (endVal && endInput) {
+            endInput.value = endVal;
+            hasFilter = true;
+        }
     }
 
     // 2. 消费分类联动 + 自动勾选精确匹配
