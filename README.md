@@ -5,7 +5,8 @@
 [![SQLite](https://img.shields.io/badge/Database-SQLite3-003B57.svg)](https://www.sqlite.org/)
 [![AI Model](https://img.shields.io/badge/LLM-DeepSeek--Flash-4D6BFE.svg)](https://www.deepseek.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
-[![AIGC Assisted](https://img.shields.io/badge/AIGC-Powered%20by%20Gemini-8E75FF.svg)](#9-致谢与-aigc-声明-acknowledgments--aigc-statement)
+[![AIGC Gemini](https://img.shields.io/badge/AIGC-Gemini%20Assisted-8E75FF.svg)](#9-致谢与-aigc-声明-acknowledgments--aigc-statement)
+[![AIGC DeepSeek](https://img.shields.io/badge/AIGC-DeepSeek%20Assisted-4D6BFE.svg)](#9-致谢与-aigc-声明-acknowledgments--aigc-statement)
 
 BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财务分析系统。项目以后端 **FastAPI + SQLite3** 为核心，结合原生极简的前端看板与管理后台，并深度接入 **DeepSeek-Flash** 大模型，实现开箱即用的自动化多维账目核算、垫付对冲平账、图表可视化，以及全流水行为学深度审计与自然语言智能问答。
 
@@ -391,4 +392,7 @@ ai_tasks:
 
 ## 9. 致谢与 AIGC 声明 (Acknowledgments & AIGC Statement)
 
-本项目由开发者主导架构设计，**全项目代码均在 Google Gemini 的协助与结对编程支持下完成**。涵盖系统架构选型、FastAPI 后端路由与 SQLite 核心财务核算、ECharts 动态可视化与响应式交互、以及 DeepSeek API 深度调用优化与配置解耦。
+本项目由开发者主导架构设计与业务把控，项目全生命周期在 **Google Gemini** 与 **DeepSeek** 的结对编程及协作下迭代推进：
+
+* **前期构建与核心架构 (Powered by Google Gemini)**：主导全项目基础架构选型、FastAPI 路由规范、SQLite 核心财务核算逻辑设计、ECharts 动态可视化与前端响应式交互链路搭建。
+* **功能扩展与深度迭代 (Powered by DeepSeek)**：深度参与后续特性的编码实现、部分模块的重构优化、细分业务逻辑完善以及基于 DeepSeek 模型的智能财务分析场景落地。
