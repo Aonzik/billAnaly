@@ -112,15 +112,20 @@ def clean_product_name(text: str) -> str:
     text = re.sub(r"[\(（].*?[\)）]", " ", text)
     return text.strip()
 
-def generate_wordcloud_data(db_path: str = "bills.db", top_n: int = 80) -> dict:
-    """提取所有月份的实际支出(EX)，清洗后分词并生成频次与金额双加权数据"""
+def generate_wordcloud_data(db_path: str = "bills.db", top_n: int = 80, year=None, month=None) -> dict:
+    """提取实际支出(EX)，清洗后分词并生成频次与金额双加权数据；指定 year/month 时仅统计该月份，否则覆盖全量历史"""
     rows = []
     if os.path.exists(db_path):
-        # 默认从 bills.db 全量读取跨月份历史
+        # 默认从 bills.db 全量读取跨月份历史；指定年月时只统计该月份的记录
         conn = sqlite3.connect(db_path)
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT 品名, 实际金额 FROM expenses WHERE 交易类型 = 'EX' AND 品名 IS NOT NULL AND 品名 != ''")
+            sql = "SELECT 品名, 实际金额 FROM expenses WHERE 交易类型 = 'EX' AND 品名 IS NOT NULL AND 品名 != ''"
+            params = []
+            if year is not None and month is not None:
+                sql += " AND 日期 LIKE ?"
+                params.append(f"{int(year)}-{int(month):02d}%")
+            cursor.execute(sql, params)
             rows = cursor.fetchall()
         finally:
             conn.close()
@@ -720,7 +725,8 @@ def run_analysis_from_db(
         year=year,
         month=month,
     )
-    data["wordcloud"] = generate_wordcloud_data(db_path=db_path)
+    # 词云跟随当前选取的核算月份统计（未指定年月时保持全量统计）
+    data["wordcloud"] = generate_wordcloud_data(db_path=db_path, year=year, month=month)
     if json_path:
         export_to_json(data, json_path)
     return data

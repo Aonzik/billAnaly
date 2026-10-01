@@ -329,7 +329,7 @@ ai_tasks:
 | --- | --- | --- |
 | `GET` | `/api/months` | 获取数据库中已有记录的所有有效核算月份列表 |
 | `POST` | `/api/refresh_analysis` | 接收 `year`、`month` 与 `monthly_budget`（兼容旧参数 `year_month`），触发重新核算，并按月份写入隔离缓存 `expense_data_YYYY-MM.json` |
-| `GET` | `/api/wordcloud` | 获取全量支出品名的词云统计数据，支持按频次与金额双维度加权计算（默认提取 Top 80 高频高额热词） |
+| `GET` | `/api/wordcloud` | 获取支出品名的词云统计数据，支持按频次与金额双维度加权计算（默认提取 Top 80；可传 `year`+`month` 限定统计月份，缺省为全量历史） |
 | `GET` | `/api/system_config` | 获取 `config.yaml` 中配置的默认预算与基础配置 |
 | `GET` | `/api/db/expenses` | 多条件检索流水明细（支持排序、区间与分页） |
 | `GET` | `/api/db/export_excel` | 接收筛选条件，以二进制流形式导出 `.xlsx` Excel 文件 |

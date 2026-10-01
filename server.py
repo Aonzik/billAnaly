@@ -144,9 +144,21 @@ def trigger_refresh(
     return {"status": "empty", "message": "该月份无数据或数据库为空"}
 
 @app.get("/api/wordcloud")
-def get_wordcloud_api():
-  """获取全量支出品名的词云统计数据（支持按频次/按金额）"""
-  return analyze.generate_wordcloud_data(DB_PATH, top_n=80)
+def get_wordcloud_api(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    year_month: Optional[str] = Query(None),
+    top_n: int = Query(80),
+):
+  """获取支出品名的词云统计数据（支持按频次/按金额，可指定核算年月）"""
+  # 兼容旧调用方的 year_month 参数（如 "2026-09"），拆分为年份与月份
+  if (year is None or month is None) and year_month:
+      parsed_year, parsed_month = analyze.parse_year_month_arg(year_month)
+      if year is None:
+          year = parsed_year
+      if month is None:
+          month = parsed_month
+  return analyze.generate_wordcloud_data(DB_PATH, top_n=top_n, year=year, month=month)
 
 # 挂载静态资源
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
