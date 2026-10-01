@@ -622,8 +622,9 @@ async function initMonthSelector() {
     const months = await res.json();
     const selector = document.getElementById('month-selector');
     
+    const savedYm = localStorage.getItem('selected_year_month') || (months.length > 0 ? months[0] : '2026-09');
     if (months.length > 0) {
-        selector.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+        selector.innerHTML = months.map(m => `<option value="${m}" ${m === savedYm ? 'selected' : ''}>${m}</option>`).join('');
     } else {
         selector.innerHTML = `<option value="2026-09">2026-09</option>`;
     }
@@ -774,13 +775,15 @@ async function refreshWithCurrentParams() {
     const monthSelector = document.getElementById('month-selector');
     const ym = monthSelector ? monthSelector.value : '';
     const budget = getCurrentBudget();
+    if (ym) {
+        localStorage.setItem('selected_year_month', ym);
+    }
 
     const params = new URLSearchParams();
     if (ym) params.append('year_month', ym);
     params.append('monthly_budget', budget);
 
-    const res = await fetch(`/api/refresh_analysis?${params.toString()}`, { method: 'POST' });
-    const data = await res.json();
+    await fetch(`/api/refresh_analysis?${params.toString()}`, { method: 'POST' });
 
     // 重新拉取并渲染 ECharts 图表（若有该函数则调用，没有则刷新页面）
     location.reload();
@@ -793,6 +796,3 @@ document.addEventListener('DOMContentLoaded', () => {
         initMonthSelector();
     }
 });
-
-// 在页面加载事件中调用
-initMonthSelector();
