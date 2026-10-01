@@ -192,6 +192,9 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
     if rows is None:
         raise ValueError("必须提供数据库条目列表 rows")
 
+    # 是否显式指定了核算年月（用于花呗还款的当月口径判定）
+    month_scoped = year is not None and month is not None
+
     recs = []
     for row in rows:
         rec = {
@@ -243,11 +246,20 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
 
     # (1) 花呗
     hb_spent = sum(r["实际金额"] for r in recs if r["支付账户"] == "HB")
-    hb_repaid = sum(
-        r["实际金额"]
-        for r in recs
-        if r["交易类型"] == "TR" and "花呗还款" in r["品名"]
-    )
+
+    def is_current_month_repay(r):
+        """判定当期花呗还款：指定月份时只认品名含当月月份号（如 10月花呗还款）且目标账户为 HB 的记录，
+        避免把本月还上个月的钱（如 9月花呗还款）计入本期；全量分析时保持原有统计口径"""
+        if r["交易类型"] != "TR" or "花呗还款" not in r["品名"]:
+            return False
+        if not month_scoped:
+            return True
+        if r["目标账户"] != "HB":
+            return False
+        m = re.search(r"(\d{1,2})\s*月", r["品名"])
+        return m is not None and int(m.group(1)) == int(month)
+
+    hb_repaid = sum(r["实际金额"] for r in recs if is_current_month_repay(r))
     hb_need_pay = hb_spent - hb_repaid
 
     # (2) 意外损益
