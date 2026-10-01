@@ -38,17 +38,17 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
   - 扣除固定成本后建议可用日均、花呗下月待还预留、拿铁因子（零食饮品）统计等。
 - **丰富的可视化图表与时间聚焦**：
   - 集成 ECharts 分类环形图、商户复购榜以及**分类堆叠柱状图 + 净支出走势折线图**。
-  - **动态品名词云透视 (WordCloud)**：深度挖掘全量支出品名关键词，前端支持**按频次（消费偏好）**与**按金额（重度开销）**双维度加权自由切换，直观还原消费图谱。
+  - **动态品名词云透视 (WordCloud)**：深度挖掘**当前核算账期**的支出品名关键词（未选定月份时为全量历史），前端支持**按频次（消费偏好）**与**按金额（重度开销）**双维度加权自由切换，直观还原消费图谱。
   - **时间范围聚焦模式 (dataZoom)**：图表底部配备可视化滑动条与调节手柄，可自由框选并缩放任意日期区间的收支波动；移动端（视口宽度低于阈值）自动强制激活聚焦手柄，保障窄屏触控浏览体验。
 - **深度穿透下钻（Drill-down 联动）**：
     - **柱状堆叠块点击**：点击任意一天的某一分类柱块，自动在**新标签页**打开管理后台，精确筛选当天的目标分类下的所有消费记录。
-    - **商户榜与词云点击**：点击商户复购榜中的商户名或全景词云中的商品关键词，一键在新标签页中筛选出目标商户或目标品名关键词的检索。
+    - **商户榜与词云点击**：点击商户复购榜中的商户名或全景词云中的商品关键词，一键在新标签页中筛选出目标商户或目标品名关键词的检索，并**自动携带当前所选账期的起止日期**（如 2026-10 会传 `2026-10-01 ~ 2026-10-31`），保证只命中当月流水。
     - **多任务保留**：跳转默认以 `_blank` 新标签页唤起，不会破坏中断当前的看板浏览态。
 
 ### 🤖 DeepSeek-Flash 驱动的 AI 智能顾问
 - **配置中心化与热调优**：所有任务的 System Prompt、模板结构（`prompt_template`）、采样温度（`temperature`）、最大输出（`max_tokens`）以及全局消费画像（`user_habits`）统一在 `config.yaml` 中配置，修改即刻生效，无需重启服务。
 - **⚡ 核心指标体检 (`/api/ai/diagnose`)**：基于当月预算水位、花呗账单及消费画像快速给出务实、犀利的三点财务健康诊断。
-- **📖 全月流水深度精读 (`/api/ai/deep_read`)**：将当月全量流水（百条级记录）脱敏并紧凑化喂入大模型，耗费不到半分钱（Token 极低），全景扫描时间节律、情绪消费（夜间冲动花销）、小额隐形刺客（<15元高频支出）及高性价比省钱动作。
+- **📖 全月流水深度精读 (`/api/ai/deep_read`)**：将当月全量流水（百条级记录）紧凑化喂入大模型，耗费不到半分钱（Token 极低），全景扫描时间节律、情绪消费（夜间冲动花销）、小额隐形刺客（<15元高频支出）及高性价比省钱动作。
 - **💬 账单流水智能问答 (`/api/ai/chat`)**：自然语言即时查询（如“本月吃炒饭花了多少钱？”、“我最近用花呗买了什么？”），内置账户代码语义翻译，无需人工写 SQL。
 - **低延迟高吞吐优化**：深度调优 API 调用参数，禁用冗余思考链（Reasoning Chain），实现毫秒级快速响应，彻底告别 Token 截断。
 
@@ -75,7 +75,9 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 
 ### 依赖项与核心库
 - **Web 框架**: `FastAPI` + `Uvicorn`
-- **数据处理与导出**: `SQLite3`, `Pandas`, `openpyxl`
+- **数据存储**: `SQLite3`（Python 标准库，零配置本地账单数据库）
+- **核算引擎与本地图表**: `jieba`（词云中文分词）、`numpy` + `matplotlib`（`analyze.py` 独立运行时渲染终端图表）
+- **Excel 导出**: `pandas` + `openpyxl`（网页端按筛选条件导出 `.xlsx`）
 - **配置解析**: `PyYAML`
 - **大模型 SDK**: `openai`（适配 DeepSeek 开放平台接口）
 - **前端库**: 原生 JavaScript (ES6+), HTML5, CSS3, `ECharts 5.x`, `marked.js`, `echarts-wordcloud.js`
@@ -104,6 +106,7 @@ BillAnaly 是一款面向个人与家庭的高效、自主可控的轻量级财�
 3. **双击或运行启动脚本**：
 * **Windows**：双击运行项目根目录下的 `quickstart.bat`。
 * **macOS**：初次使用需在终端赋予执行权限 `chmod +x quickstart.command`，随后在访达中双击 `quickstart.command` 即可运行。
+* **Linux**：在终端中执行 `chmod +x quickstart.sh && ./quickstart.sh`。脚本会自动检测 Python 3.12、创建虚拟环境并安装依赖；下载前端资源需要 `curl` 或 `wget`（任选其一，均未安装时脚本会给出提示）。
 
 ---
 
@@ -136,11 +139,15 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 # 安装前端库依赖
-# Windows:
-mkdir static/js -Force # macOS/Linux: mkdir -p js
+# Windows (PowerShell):
+#   New-Item -ItemType Directory -Force static/js
+# macOS/Linux:
+#   mkdir -p static/js
 curl -o static/js/echarts.min.js "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
 curl -o static/js/marked.min.js "https://cdn.jsdelivr.net/npm/marked/marked.min.js"
 curl -o static/js/echarts-wordcloud.min.js "https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"
+# 提示：Windows PowerShell 内置的 curl 是 Invoke-WebRequest 的别名，请改用 curl.exe；
+# 也可以直接运行对应平台的 quickstart 脚本自动完成依赖下载。
 
 
 
@@ -181,9 +188,10 @@ python server.py
 
 ```text
 billAnaly/
-├── config.yaml               # 全局配置文件 (DeepSeek Key、预算、剔除商户、AI 提示词中心)
+├── config.yaml               # 全局配置文件 (DeepSeek Key、剔除商户、词云词典、AI 提示词中心)
+├── config-example.yaml       # 配置模板 (复制为 config.yaml 并填入 Key 后使用)
 ├── server.py                 # FastAPI 核心入口与静态文件路由托管
-├── analyze.py                # 核心财务核算引擎 (聚合统计、垫付冲抵、商户排行榜)
+├── analyze.py                # 核心财务核算引擎 (聚合统计、垫付冲抵、商户排行榜)；可独立运行 `python analyze.py [YYYY-MM]`
 ├── ai_assistant.py           # AI 模块 (动态热加载配置、财务体检、深度精读、账单问答)
 ├── db_manager.py             # 数据库 CRUD 路由与 Excel 导出接口
 ├── bills.db                  # SQLite 核心账单数据库(首次启动由服务自动检测并创建)
@@ -199,6 +207,7 @@ billAnaly/
 │   └── js/                   # 离线前端核心依赖库 (ECharts, Marked, WordCloud)
 ├── quickstart.bat            # Windows 一键快速配置虚拟环境并启动
 ├── quickstart.command        # macOS 一键快速配置虚拟环境并启动
+├── quickstart.sh             # Linux 一键快速配置虚拟环境并启动
 ├── LICENSE.md                # MIT 开源许可证
 └── README.md                 # 项目使用与说明文档
 
@@ -216,27 +225,29 @@ deepseek:
   base_url: "https://api.deepseek.com"
   model: "deepseek-flash"
 
-# 商户排行榜需剔除的内部账户/通道
+# 商户复购榜中需要剔除的账户代码、支付通道或非真实商户名称
 non_merchants:
-  - HB
-  - VX
-  - AL
-  - BK
-  - TC
-  - 腾讯
-  - 财付通
-  - 内部转账
+  - HB        # 花呗
+  - VX        # 微信
+  - AL        # 支付宝
+  - BK        # 银行卡
+  - TC        # 交通卡
+  - 微信
+  - 支付宝
 
 # 词云自定义专有名词（防止被 jieba 拆散成单字或碎词）
 custom_words:
   - 娃哈哈
   - 蜜雪冰城
-  - 鸣潮
   - 洁面巾
   - 月卡
   - 盒味道
   - 牛丼
   - 拿铁
+
+# 词云自定义屏蔽词（从统计结果中剔除）
+stop_words:
+  - 学费
 
 ```
 
@@ -320,6 +331,8 @@ ai_tasks:
 
 * **账户代码**：`VX` (微信)、`AL` (支付宝)、`BK` (银行卡)、`HB` (蚂蚁花呗)、`TC` (交通卡)。商户或人名直接录入中文原名即可。
 
+* **花呗「下月待还」当期口径**：按选定账期核算时，`hb_repaid` 仅统计**品名含当月月份号（如 `10月花呗还款`）且目标账户为 `HB`** 的还款记录——本月还上月的款项（如 10 月 1 日还的 `9月花呗还款`）不会被计入当期；全量核算（未选定月份）时保持对所有花呗还款求和。请按 `N月花呗还款` 的格式录入还款品名。
+
 ---
 
 ## 6. 使用说明与 API 规范 (Usage & API Reference)
@@ -331,10 +344,13 @@ ai_tasks:
 | `GET` | `/api/months` | 获取数据库中已有记录的所有有效核算月份列表 |
 | `POST` | `/api/refresh_analysis` | 接收 `year`、`month` 与 `monthly_budget`（兼容旧参数 `year_month`），触发重新核算，并按月份写入隔离缓存 `expense_data_YYYY-MM.json` |
 | `GET` | `/api/wordcloud` | 获取支出品名的词云统计数据，支持按频次与金额双维度加权计算（默认提取 Top 80；可传 `year`+`month` 限定统计月份，缺省为全量历史） |
-| `GET` | `/api/system_config` | 获取 `config.yaml` 中配置的默认预算与基础配置 |
-| `GET` | `/api/db/expenses` | 多条件检索流水明细（支持排序、区间与分页） |
+| `GET` | `/api/db/expenses` | 多条件检索流水明细（支持日期区间、分类/交易类型/账户/商户/品名/金额范围过滤与排序） |
+| `POST` | `/api/db/expenses` | 新增一条流水明细（日期、时间、交易类型、分类、品名、金额、账户等） |
+| `PUT` | `/api/db/expenses/{id}` | 按 ID 更新流水明细的任意字段 |
+| `DELETE` | `/api/db/expenses/{id}` | 按 ID 删除流水明细 |
 | `GET` | `/api/db/export_excel` | 接收筛选条件，以二进制流形式导出 `.xlsx` Excel 文件 |
 | `GET` | `/api/ai/diagnose` | 读取 YAML 模板并调优，生成当前月份核心指标体检评估（支持 `year_month` 参数读取对应月份缓存） |
+| `POST` | `/api/ai/parse_expense` | 将自然语言/语音记账文本解析为结构化账单条目（返回标准 JSON 字段） |
 | `GET` | `/api/ai/deep_read` | 调取选定月份的逐笔全量流水，输出行为学审计深度报告 |
 | `POST` | `/api/ai/chat` | 接收自然语言提问文本，检索近 200 条时序流水后由大模型作答 |
 
@@ -345,7 +361,7 @@ ai_tasks:
 * **跨月对比**：在“核算账期”下拉框中选择历史月份，一键切换并查看历史收支结余与环比走势。
 * **图表元素穿透下钻（查账必备）**：
   * 在堆叠柱状图中发现某一天某类开销突然冲高时，**直接鼠标点击该柱块**，系统会自动在新标签页打开 `manager.html` 并精准筛选出该天该类别的明细流水。
-  * 在商户复购榜中点击商户行、或在全景词云中点击某个大字关键词，均可一键弹出新页面查阅相关的所有交易记录。
+  * 在商户复购榜中点击商户行、或在全景词云中点击某个大字关键词，均可一键弹出新页面查阅相关的所有交易记录；跳转时会自动携带当前「核算账期」的起止日期，只命中当月流水。
   * 如果需要恢复全览，点击管理页的 **“重置筛选”** 按钮即可一键抹除参数并刷新展示全量数据。
 
 ---
@@ -375,6 +391,14 @@ ai_tasks:
 
 ### Q6: 首次部署时没有 `bills.db` 数据库文件怎么处理？
 - **解答**：无需任何操作。系统在启动阶段会自动探测 `bills.db` 是否存在，若缺失会自动完成建库、建表（`expenses`）及建立相关查询索引（日期、分类、类型）。
+
+### Q7: 为什么 2026-10 的「下月待还花呗」没有把 10 月 1 日还的「9月花呗还款」算进去？
+
+- **解答**：按账期核算时，当期还款只认**品名含当月月份号（如 `10月花呗还款`）且目标账户为 `HB`** 的记录。10 月 1 日还的 `9月花呗还款` 是清偿 9 月账单，不计入 10 月的 `hb_repaid`（全量核算时保持对所有还款求和）。请按 `N月花呗还款` 的命名格式录入还款记录，即可正确统计当期待还。
+
+### Q8: 词云图里的词和某个月份对不上？
+
+- **解答**：词云默认跟随「核算账期」选择器统计**当前所选月份**的支出品名（未选定月份时为全量历史）。切换月份后看板会自动重新核算并刷新对应月份的隔离缓存，词云随之更新。
 
 ---
 

@@ -1,6 +1,7 @@
 pyyaml
 numpy
 pandas
+openpyxl
 matplotlib
 fastapi
 pydantic
