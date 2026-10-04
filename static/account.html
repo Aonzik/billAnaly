@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账号管理 · 智能个人财务分析系统</title>
+    <link rel="icon" href="favicon.ico">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 22px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f1f5f9; color: #334155;
+        }
+        .container { max-width: 860px; margin: 0 auto; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+        }
+        .topbar h1 { font-size: 19px; margin: 0; color: #0f172a; }
+        .topbar .links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .topbar a, .topbar button {
+            font-size: 13px; text-decoration: none; padding: 7px 13px;
+            border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;
+            color: #334155; cursor: pointer; font-weight: 600;
+        }
+        .topbar a:hover, .topbar button:hover { background: #f8fafc; border-color: #94a3b8; }
+        .topbar .btn-logout { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+        .topbar .btn-logout:hover { background: #fee2e2; }
+
+        .card {
+            background: #fff; border-radius: 10px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); margin-bottom: 16px;
+        }
+        .card h2 {
+            font-size: 15px; margin: 0 0 4px; color: #0f172a;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card .desc { font-size: 12.5px; color: #94a3b8; margin: 0 0 16px; }
+        .role-badge {
+            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+            background: #dbeafe; color: #1d4ed8;
+        }
+        .role-badge.user { background: #e2e8f0; color: #475569; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-size: 12px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
+        .form-group input {
+            padding: 9px 11px; font-size: 13.5px; border: 1px solid #cbd5e1;
+            border-radius: 6px; outline: none;
+        }
+        .form-group input:focus {
+            border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .actions { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        button.primary {
+            background: #2563eb; color: #fff; border: none; padding: 9px 18px;
+            border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+        }
+        button.primary:hover { background: #1d4ed8; }
+        button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
+
+        .msg { display: none; font-size: 13px; padding: 9px 12px; border-radius: 6px; margin-top: 12px; }
+        .msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .msg.ok { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap; }
+        th { background: #f8fafc; color: #64748b; font-weight: 600; }
+        tr:hover td { background: #f8fafc; }
+        .btn-del {
+            background: #fee2e2; color: #b91c1c; border: none; padding: 4px 10px;
+            border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600;
+        }
+        .btn-del:hover { background: #fecaca; }
+        .btn-del:disabled { background: #f1f5f9; color: #cbd5e1; cursor: not-allowed; }
+        .muted { color: #94a3b8; font-size: 12px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>👤 账号管理</h1>
+        <div class="links">
+            <a href="/dashboard.html">📊 图表看板</a>
+            <a href="/manager.html">📝 记账管理</a>
+            <button class="btn-logout" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <!-- 当前账号信息 -->
+    <div class="card">
+        <h2>当前账号 <span class="role-badge" id="role-badge">-</span></h2>
+        <p class="desc">
+            登录账号：<b id="current-username">加载中...</b>
+            <span class="muted" id="created-at"></span>
+        </p>
+    </div>
+
+    <!-- 修改账号名 -->
+    <div class="card">
+        <h2>✏️ 修改账号名</h2>
+        <p class="desc">修改后用新账号名登录；需输入当前密码确认身份。</p>
+        <div class="grid">
+            <div class="form-group">
+                <label>新账号名</label>
+                <input type="text" id="new-username" placeholder="请输入新的账号名">
+            </div>
+            <div class="form-group">
+                <label>当前密码</label>
+                <input type="password" id="username-password" placeholder="请输入当前密码" autocomplete="current-password">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="primary" id="btn-username" onclick="changeUsername()">保存账号名</button>
+        </div>
+        <div class="msg" id="msg-username"></div>
+    </div>
+
+    <!-- 修改密码 -->
+    <div class="card">
+        <h2>🔑 修改密码</h2>
+        <p class="desc">无密码强度要求，但需两次填写一致；修改成功后需用新密码重新登录。</p>
+        <div class="grid">
+            <div class="form-group">
+                <label>当前密码</label>
+                <input type="password" id="old-password" placeholder="请输入当前密码" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label>新密码</label>
+                <input type="password" id="new-password" placeholder="请输入新密码" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>确认新密码</label>
+                <input type="password" id="confirm-password" placeholder="请再次输入新密码" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="primary" id="btn-password" onclick="changePassword()">保存密码</button>
+        </div>
+        <div class="msg" id="msg-password"></div>
+    </div>
+
+    <!-- 管理员：账号管理 -->
+    <div class="card" id="admin-card" style="display:none;">
+        <h2>🛡️ 账号管理（仅管理员）</h2>
+        <p class="desc">创建新账号后，把账号密码告知使用者，对方即可登录系统。</p>
+        <div class="grid">
+            <div class="form-group">
+                <label>新账号名</label>
+                <input type="text" id="create-username" placeholder="如 zhangsan">
+            </div>
+            <div class="form-group">
+                <label>初始密码</label>
+                <input type="text" id="create-password" placeholder="如 123456">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="primary" id="btn-create" onclick="createUser()">➕ 创建账号</button>
+        </div>
+        <div class="msg" id="msg-create"></div>
+
+        <div style="margin-top: 20px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">ID</th>
+                        <th>账号名</th>
+                        <th style="width: 90px;">角色</th>
+                        <th>创建者</th>
+                        <th>创建时间</th>
+                        <th style="width: 90px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="user-table-body">
+                    <tr><td colspan="6" class="muted" style="text-align:center; padding:18px;">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+
+    function showMsg(id, text, type = 'error') {
+        const el = document.getElementById(id);
+        el.className = 'msg ' + type;
+        el.textContent = text;
+    }
+
+    function clearMsg(id) {
+        const el = document.getElementById(id);
+        el.className = 'msg';
+        el.textContent = '';
+    }
+
+    function handleUnauthorized(res) {
+        if (res.status === 401) {
+            window.location.replace('/login.html?next=' + encodeURIComponent(window.location.pathname));
+            return true;
+        }
+        return false;
+    }
+
+    async function logout() {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+        } catch (e) { /* 忽略 */ }
+        window.location.replace('/login.html');
+    }
+
+    async function loadMe() {
+        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (handleUnauthorized(res)) return;
+        if (!res.ok) return;
+        currentUser = await res.json();
+
+        document.getElementById('current-username').textContent = currentUser.username;
+        document.getElementById('new-username').value = currentUser.username;
+
+        const badge = document.getElementById('role-badge');
+        if (currentUser.role === 'admin') {
+            badge.textContent = '管理员';
+            badge.className = 'role-badge';
+            document.getElementById('admin-card').style.display = 'block';
+            loadUsers();
+        } else {
+            badge.textContent = '普通用户';
+            badge.className = 'role-badge user';
+        }
+    }
+
+    async function loadUsers() {
+        const res = await fetch('/api/auth/users', { credentials: 'same-origin' });
+        if (res.status === 403) {
+            document.getElementById('admin-card').style.display = 'none';
+            return;
+        }
+        if (handleUnauthorized(res)) return;
+        if (!res.ok) return;
+
+        const users = await res.json();
+        const tbody = document.getElementById('user-table-body');
+
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px;">暂无账号</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+            const isSelf = currentUser && u.id === currentUser.id;
+            const roleText = u.role === 'admin' ? '管理员' : '普通用户';
+            const delBtn = isSelf
+                ? '<button class="btn-del" disabled title="不能删除当前登录账号">当前</button>'
+                : `<button class="btn-del" onclick="deleteUser(${u.id}, '${u.username.replace(/'/g, "\\'")}')">删除</button>`;
+            return `<tr>
+                <td class="muted">${u.id}</td>
+                <td><b>${u.username}</b></td>
+                <td>${roleText}</td>
+                <td class="muted">${u.created_by || '-'}</td>
+                <td class="muted">${u.created_at || '-'}</td>
+                <td>${delBtn}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function createUser() {
+        clearMsg('msg-create');
+        const username = document.getElementById('create-username').value.trim();
+        const password = document.getElementById('create-password').value;
+
+        if (!username || !password) {
+            showMsg('msg-create', '请填写新账号名与初始密码');
+            return;
+        }
+
+        const btn = document.getElementById('btn-create');
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/auth/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ username, password })
+            });
+            if (handleUnauthorized(res)) return;
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showMsg('msg-create', `账号「${username}」创建成功，请把账号密码告知使用者`, 'ok');
+                document.getElementById('create-username').value = '';
+                document.getElementById('create-password').value = '';
+                loadUsers();
+            } else {
+                showMsg('msg-create', data.detail || '创建失败');
+            }
+        } catch (e) {
+            showMsg('msg-create', '网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteUser(id, username) {
+        if (!confirm(`确定删除账号「${username}」吗？该账号将立即无法登录。`)) return;
+        clearMsg('msg-create');
+        try {
+            const res = await fetch(`/api/auth/users/${id}`, {
+                method: 'DELETE',
+                credentials: 'same-origin'
+            });
+            if (handleUnauthorized(res)) return;
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showMsg('msg-create', `账号「${username}」已删除`, 'ok');
+                loadUsers();
+            } else {
+                showMsg('msg-create', data.detail || '删除失败');
+            }
+        } catch (e) {
+            showMsg('msg-create', '网络异常，请稍后重试');
+        }
+    }
+
+    async function changeUsername() {
+        clearMsg('msg-username');
+        const newUsername = document.getElementById('new-username').value.trim();
+        const currentPassword = document.getElementById('username-password').value;
+
+        if (!newUsername) { showMsg('msg-username', '请输入新账号名'); return; }
+        if (!currentPassword) { showMsg('msg-username', '请输入当前密码以确认身份'); return; }
+
+        const btn = document.getElementById('btn-username');
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/auth/me/username', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ new_username: newUsername, current_password: currentPassword })
+            });
+            if (handleUnauthorized(res)) return;
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showMsg('msg-username', `账号名已修改为「${data.username}」，下次请用新账号名登录`, 'ok');
+                document.getElementById('username-password').value = '';
+                document.getElementById('current-username').textContent = data.username;
+                if (currentUser) currentUser.username = data.username;
+                loadUsers();
+            } else {
+                showMsg('msg-username', data.detail || '修改失败');
+            }
+        } catch (e) {
+            showMsg('msg-username', '网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function changePassword() {
+        clearMsg('msg-password');
+        const currentPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (!currentPassword) { showMsg('msg-password', '请输入当前密码'); return; }
+        if (!newPassword) { showMsg('msg-password', '请输入新密码'); return; }
+        if (newPassword !== confirmPassword) { showMsg('msg-password', '两次输入的新密码不一致'); return; }
+
+        const btn = document.getElementById('btn-password');
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/auth/me/password', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            });
+            if (handleUnauthorized(res)) return;
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showMsg('msg-password', '密码修改成功，正在跳转登录页...', 'ok');
+                setTimeout(() => window.location.replace('/login.html'), 1200);
+            } else {
+                showMsg('msg-password', data.detail || '修改失败');
+            }
+        } catch (e) {
+            showMsg('msg-password', '网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    loadMe();
+</script>
+</body>
+</html>
