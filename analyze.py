@@ -13,6 +13,8 @@ import jieba
 import matplotlib.pyplot as plt
 import numpy as np
 
+import logger as oplog
+
 # 设置 Matplotlib 中文字体支持
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial Unicode MS"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -129,6 +131,12 @@ def generate_wordcloud_data(db_path: str = "bills.db", top_n: int = 80, year=Non
             rows = cursor.fetchall()
         finally:
             conn.close()
+        # ---- 操作日志：词云统计直接读取数据库 ----
+        oplog.log_db(
+            "QUERY", "expenses",
+            f"统计词云数据（{year}-{month:02d}）" if year and month else "统计词云数据（全量历史）",
+            result_count=len(rows),
+        )
 
     # 注册自定义专有名词与停用词
     cfg = load_system_config()
@@ -726,6 +734,17 @@ def run_analysis_from_db(
     cursor.execute(sql, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
+
+    # ---- 操作日志：分析引擎读取账单 ----
+    scope = "全量" if (year is None and month is None) else (
+        f"{int(year)}-{int(month):02d}" if (year is not None and month is not None) else
+        (f"{int(year)}年" if year is not None else f"{int(month):02d}月")
+    )
+    oplog.log_db(
+        "QUERY", "expenses",
+        f"分析引擎读取账单（范围：{scope}），读取 {len(rows)} 条",
+        result_count=len(rows), scope=scope,
+    )
 
     if not rows:
         return None

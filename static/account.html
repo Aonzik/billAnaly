@@ -85,6 +85,7 @@
         <div class="links">
             <a href="/dashboard.html">📊 图表看板</a>
             <a href="/manager.html">📝 记账管理</a>
+            <a href="/logs.html" id="logs-link" style="display:none;">📜 操作日志</a>
             <button class="btn-logout" onclick="logout()">退出登录</button>
         </div>
     </div>
@@ -225,6 +226,7 @@
             badge.textContent = '管理员';
             badge.className = 'role-badge';
             document.getElementById('admin-card').style.display = 'block';
+            document.getElementById('logs-link').style.display = 'inline-block';
             loadUsers();
         } else {
             badge.textContent = '普通用户';

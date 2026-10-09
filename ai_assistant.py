@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
 
+import logger as oplog
+
 ai_router = APIRouter(prefix="/api/ai", tags=["AI Assistant API"])
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,6 +80,8 @@ def format_acc(account_val: str) -> str:
 
 
 def get_db_connection():
+    # ---- 操作日志：AI 模块直接打开数据库连接 ----
+    oplog.log_db("QUERY", "connection", "AI 模块打开数据库连接 bills.db", db=os.path.basename(DB_PATH))
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -107,6 +111,8 @@ def format_records_to_text(rows: list[dict]) -> str:
 @ai_router.get("/diagnose")
 def analyze_financial_habits(year_month: Optional[str] = None):
     if not client:
+        oplog.log("AI 消费诊断失败：未初始化 OpenAI 客户端", op_type="AI",
+                  table="expenses", task="diagnose", result="failed")
         return {"advice": "❌ 后端错误：OpenAI 客户端未初始化，请检查 API Key 配置。"}
 
     # 指定月份时优先读取该月份的隔离缓存（如 expense_data_2026-09.json）
@@ -173,9 +179,17 @@ def analyze_financial_habits(year_month: Optional[str] = None):
         )
 
         reply_text = (response.choices[0].message.content or "").strip()
+        oplog.log(
+            f"AI 消费诊断完成（数据源 {os.path.basename(json_path)}，"
+            f"月份 {year_month or '全部'}）",
+            op_type="AI", table="expenses", task="diagnose",
+            year_month=year_month, result="success", reply_chars=len(reply_text),
+        )
         return {"advice": reply_text if reply_text else "生成超时或未获取到正文，请重试。"}
 
     except Exception as e:
+        oplog.log(f"AI 消费诊断异常：{type(e).__name__}: {e}", op_type="ERROR",
+                  table="expenses", task="diagnose", result="failed")
         return {"advice": f"❌ DeepSeek 调用异常: {str(e)}"}
 
 
@@ -246,6 +260,13 @@ def chat_with_bills(req: ChatQueryReq):
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
+    # ---- 操作日志：智能问答读取的流水 ----
+    oplog.log(
+        f"AI 智能问答读取流水 {len(rows)} 条（上限 200 条）",
+        op_type="AI", table="expenses", task="chat",
+        result_count=len(rows), query=req.query[:200],
+    )
+
     if not rows:
         return {"answer": "当前数据库中暂无消费记录可供查询。"}
 
@@ -277,6 +298,11 @@ def chat_with_bills(req: ChatQueryReq):
         extra_body={"thinking": {"type": "disabled"}},
     )
     reply_text = (response.choices[0].message.content or "").strip()
+    oplog.log(
+        f"AI 智能问答完成，问题「{req.query[:60]}」",
+        op_type="AI", table="expenses", task="chat",
+        result="success", reply_chars=len(reply_text),
+    )
     return {"answer": reply_text or "未能输出回答，请重试。"}
 
 
@@ -301,6 +327,13 @@ def deep_read_monthly_expenses(year_month: str = "2026-09"):
     )
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
+
+    # ---- 操作日志：月度精读读取的流水 ----
+    oplog.log(
+        f"AI 月度精读读取 {year_month} 流水 {len(rows)} 条",
+        op_type="AI", table="expenses", task="deep_read",
+        year_month=year_month, result_count=len(rows),
+    )
 
     if not rows:
         return {"report": f"⚠️ 账单数据库中未检索到 {year_month} 的消费记录。"}
@@ -334,6 +367,14 @@ def deep_read_monthly_expenses(year_month: str = "2026-09"):
             max_tokens=task_cfg.get("max_tokens", 4096),
             extra_body={"thinking": {"type": "disabled"}},
         )
-        return {"report": response.choices[0].message.content.strip()}
+        report = response.choices[0].message.content.strip()
+        oplog.log(
+            f"AI 月度精读完成（{year_month}，{len(rows)} 笔）",
+            op_type="AI", table="expenses", task="deep_read",
+            year_month=year_month, result="success", reply_chars=len(report),
+        )
+        return {"report": report}
     except Exception as e:
+        oplog.log(f"AI 月度精读异常：{type(e).__name__}: {e}", op_type="ERROR",
+                  table="expenses", task="deep_read", year_month=year_month, result="failed")
         return {"report": f"❌ 精读生成失败: {str(e)}"}

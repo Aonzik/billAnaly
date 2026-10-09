@@ -18,6 +18,10 @@ users.db
 static/expense_data.json
 static/expense_data_*.json
 
+# 操作日志（含账号操作轨迹，同样属于隐私数据）
+logs/
+*.open.log
+
 # 系统或编辑器临时文件
 .DS_Store
 Thumbs.db

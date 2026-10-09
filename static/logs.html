@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作日志 · 智能个人财务分析系统</title>
+    <link rel="icon" href="favicon.ico">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 22px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f1f5f9; color: #334155;
+        }
+        .container { max-width: 1180px; margin: 0 auto; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+        }
+        .topbar h1 { font-size: 19px; margin: 0; color: #0f172a; }
+        .topbar .links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .topbar a, .topbar button {
+            font-size: 13px; text-decoration: none; padding: 7px 13px;
+            border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;
+            color: #334155; cursor: pointer; font-weight: 600;
+        }
+        .topbar a:hover, .topbar button:hover { background: #f8fafc; border-color: #94a3b8; }
+        .topbar .btn-logout { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+
+        .card {
+            background: #fff; border-radius: 10px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); margin-bottom: 16px;
+        }
+        .card h2 { font-size: 15px; margin: 0 0 4px; color: #0f172a; }
+        .card .desc { font-size: 12.5px; color: #94a3b8; margin: 0 0 16px; }
+
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; }
+        .field label { font-size: 12px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
+        .field select, .field input {
+            padding: 8px 11px; font-size: 13px; border: 1px solid #cbd5e1;
+            border-radius: 6px; outline: none; background: #fff; min-width: 150px;
+        }
+        .field select:focus, .field input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+        button.primary {
+            background: #2563eb; color: #fff; border: none; padding: 9px 18px;
+            border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+        }
+        button.primary:hover { background: #1d4ed8; }
+        button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
+        button.ghost {
+            background: #fff; color: #334155; border: 1px solid #cbd5e1;
+            padding: 9px 16px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+        }
+        button.ghost:hover { background: #f8fafc; }
+
+        .stat { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: #64748b; margin-bottom: 12px; }
+        .stat b { color: #0f172a; }
+
+        .logbox {
+            background: #0f172a; color: #cbd5e1; border-radius: 8px; padding: 14px;
+            font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 12px;
+            line-height: 1.65; max-height: 62vh; overflow: auto; white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .logbox .ts { color: #7dd3fc; }
+        .logbox .op { color: #fca5a5; font-weight: 700; }
+        .logbox .act { color: #e2e8f0; }
+        .logbox .meta { color: #64748b; }
+        .logbox .row { padding: 3px 0; border-bottom: 1px dashed rgba(148,163,184,.15); }
+
+        .msg { display: none; font-size: 13px; padding: 9px 12px; border-radius: 6px; margin-top: 12px; }
+        .msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .msg.ok { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .muted { color: #94a3b8; font-size: 12px; }
+
+        .badge {
+            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+            background: #dcfce7; color: #15803d; margin-left: 6px;
+        }
+        .badge.arch { background: #e2e8f0; color: #475569; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>📜 操作日志</h1>
+        <div class="links">
+            <a href="/dashboard.html">📊 图表看板</a>
+            <a href="/manager.html">📝 记账管理</a>
+            <a href="/account.html">👤 账号管理</a>
+            <button class="btn-logout" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>日志文件与筛选</h2>
+        <p class="desc" id="log-dir">日志目录：加载中...</p>
+        <div class="toolbar">
+            <div class="field">
+                <label>日志文件</label>
+                <select id="file-select" style="min-width:320px;"></select>
+            </div>
+            <div class="field">
+                <label>显示行数</label>
+                <select id="lines-select">
+                    <option value="100">最近 100 行</option>
+                    <option value="200" selected>最近 200 行</option>
+                    <option value="500">最近 500 行</option>
+                    <option value="1000">最近 1000 行</option>
+                    <option value="3000">最近 3000 行</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>关键字过滤</label>
+                <input type="text" id="keyword" placeholder="如 admin / 删除 / 密码" style="min-width:220px;">
+            </div>
+            <button class="primary" id="btn-load" onclick="loadLog()">🔄 刷新日志</button>
+            <button class="ghost" onclick="downloadLog()">⬇️ 下载该文件</button>
+        </div>
+        <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="card">
+        <div class="stat">
+            <span>当前文件：<b id="stat-file">-</b></span>
+            <span>文件总行数：<b id="stat-total">-</b></span>
+            <span>命中过滤：<b id="stat-matched">-</b></span>
+            <span>刷新时间：<b id="stat-time">-</b></span>
+        </div>
+        <div class="logbox" id="logbox">加载中...</div>
+    </div>
+</div>
+
+<script>
+    let files = [];
+
+    function showMsg(text, type = 'error') {
+        const el = document.getElementById('msg');
+        el.className = 'msg ' + type;
+        el.textContent = text;
+    }
+    function clearMsg() {
+        const el = document.getElementById('msg');
+        el.className = 'msg';
+        el.textContent = '';
+    }
+
+    function handleUnauthorized(res) {
+        if (res.status === 401) {
+            window.location.replace('/login.html?next=' + encodeURIComponent(window.location.pathname));
+            return true;
+        }
+        if (res.status === 403) {
+            showMsg('仅管理员可以查看操作日志');
+            document.getElementById('logbox').textContent = '（无权限访问）';
+            return true;
+        }
+        return false;
+    }
+
+    async function logout() {
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch (e) {}
+        window.location.replace('/login.html');
+    }
+
+    async function loadFiles() {
+        const res = await fetch('/api/logs/files', { credentials: 'same-origin' });
+        if (handleUnauthorized(res)) return;
+        if (!res.ok) { showMsg('日志文件列表加载失败'); return; }
+
+        const data = await res.json();
+        files = data.files || [];
+        document.getElementById('log-dir').textContent = '日志目录：' + (data.dir || '-');
+
+        const sel = document.getElementById('file-select');
+        if (!files.length) {
+            sel.innerHTML = '<option value="">（暂无日志文件）</option>';
+            document.getElementById('logbox').textContent = '暂无日志记录。';
+            return;
+        }
+        sel.innerHTML = files.map(f => {
+            const tag = f.active ? '[写入中]' : '[已归档]';
+            const range = f.end ? `${f.start} ~ ${f.end}` : `${f.start} ~ 写入中`;
+            return `<option value="${f.name}">${tag} ${range}  (${f.size_human})</option>`;
+        }).join('');
+    }
+
+    function fmtLine(line) {
+        try {
+            const d = JSON.parse(line);
+            const meta = [];
+            if (d.ip) meta.push('ip=' + d.ip);
+            if (d.status_code) meta.push('http=' + d.status_code);
+            if (d.elapsed_ms !== undefined) meta.push(d.elapsed_ms + 'ms');
+            if (d.path) meta.push(d.path);
+            if (d.table) meta.push('table=' + d.table);
+            return `<div class="row"><span class="ts">${d.ts || ''}</span>  `
+                 + `<span class="op">${escapeHtml(d.op || '')}</span>  `
+                 + `<span class="act">${escapeHtml(d.action || '')}</span>  `
+                 + `<span class="meta">${escapeHtml(meta.join(' | '))}</span></div>`;
+        } catch (e) {
+            return `<div class="row">${escapeHtml(line)}</div>`;
+        }
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function loadLog() {
+        clearMsg();
+        const file = document.getElementById('file-select').value;
+        const lines = document.getElementById('lines-select').value;
+        const kw = document.getElementById('keyword').value.trim();
+
+        const params = new URLSearchParams({ lines });
+        if (file) params.set('filename', file);
+        if (kw) params.set('keyword', kw);
+
+        const btn = document.getElementById('btn-load');
+        btn.disabled = true;
+        btn.textContent = '加载中...';
+        try {
+            const res = await fetch('/api/logs/read?' + params.toString(), { credentials: 'same-origin' });
+            if (handleUnauthorized(res)) return;
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                showMsg(d.detail || '日志读取失败');
+                return;
+            }
+            const data = await res.json();
+            document.getElementById('stat-file').textContent = data.file || '-';
+            document.getElementById('stat-total').textContent = data.total;
+            document.getElementById('stat-matched').textContent = data.matched !== undefined ? data.matched : '-';
+            document.getElementById('stat-time').textContent = new Date().toLocaleTimeString('zh-CN');
+
+            const box = document.getElementById('logbox');
+            if (!data.lines || !data.lines.length) {
+                box.textContent = '（该文件暂无匹配记录）';
+            } else {
+                box.innerHTML = data.lines.map(fmtLine).join('');
+                box.scrollTop = box.scrollHeight;
+            }
+        } catch (e) {
+            showMsg('网络异常，请稍后重试');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔄 刷新日志';
+        }
+    }
+
+    function downloadLog() {
+        const file = document.getElementById('file-select').value;
+        if (!file) { showMsg('请先选择一个日志文件'); return; }
+        window.location.href = '/api/logs/download?filename=' + encodeURIComponent(file);
+    }
+
+    document.getElementById('keyword').addEventListener('keydown', e => {
+        if (e.key === 'Enter') loadLog();
+    });
+    document.getElementById('file-select').addEventListener('change', loadLog);
+
+    (async function init() {
+        await loadFiles();
+        await loadLog();
+    })();
+</script>
+</body>
+</html>

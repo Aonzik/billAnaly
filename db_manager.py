@@ -11,11 +11,41 @@ from fastapi import APIRouter, HTTPException
 import pandas as pd
 from pydantic import BaseModel
 
+import logger as oplog
+
 db_router = APIRouter(prefix="/api/db", tags=["Database GUI API"])
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bills.db")
+TABLE = "expenses"
+
+
+def describe_expense(item) -> str:
+    """把一条账单压缩成单行摘要，便于写入日志"""
+    parts = []
+    if getattr(item, "日期", None):
+        day = str(item.日期)
+        if getattr(item, "时间", None):
+            day += f" {item.时间}"
+        parts.append(day)
+    if getattr(item, "交易类型", None):
+        parts.append(f"类型={item.交易类型}")
+    if getattr(item, "分类", None):
+        parts.append(f"分类={item.分类}")
+    if getattr(item, "品名", None):
+        parts.append(f"品名={item.品名}")
+    if getattr(item, "实际金额", None) is not None:
+        parts.append(f"金额={item.实际金额}")
+    if getattr(item, "支付账户", None):
+        parts.append(f"支付={item.支付账户}")
+    if getattr(item, "目标账户", None):
+        parts.append(f"目标={item.目标账户}")
+    if getattr(item, "结算状态", None):
+        parts.append(f"结算={item.结算状态}")
+    return " ".join(parts)
 
 
 def get_db():
+    # ---- 操作日志：建立数据库连接（每次读写前的取连接动作）----
+    oplog.log_db("QUERY", "connection", f"打开数据库连接 {os.path.basename(DB_PATH)}", db=os.path.basename(DB_PATH))
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -142,6 +172,21 @@ def list_expenses(
     cursor.execute(query, params)
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
+
+    # ---- 操作日志：查询 bills.db/expenses ----
+    oplog.log_db(
+        "QUERY",
+        TABLE,
+        f"筛选账单，命中 {len(rows)} 条",
+        filters={k: v for k, v in {
+            "start_date": start_date, "end_date": end_date,
+            "category": category, "exact_category": exact_category if category else None,
+            "pay_acc": pay_acc, "trans_type": trans_type, "merchant": merchant,
+            "name": name, "min_amount": min_amount, "max_amount": max_amount,
+            "sort_order": direction,
+        }.items() if v not in (None, "")},
+        result_count=len(rows),
+    )
     return rows
 
 
@@ -170,6 +215,14 @@ def add_expense(item: ExpenseItem):
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
+
+    # ---- 操作日志：新增账单条目 ----
+    oplog.log_db(
+        "CREATE", TABLE,
+        f"新增账单：{describe_expense(item)}",
+        row_id=new_id,
+        fields=item.model_dump(),
+    )
     return {"status": "success", "id": new_id}
 
 
@@ -177,6 +230,11 @@ def add_expense(item: ExpenseItem):
 def update_expense(item_id: int, item: ExpenseUpdateItem):
     conn = get_db()
     cursor = conn.cursor()
+
+    # 先取出修改前的原值，日志里记录「从什么变成什么」才可追溯
+    before = cursor.execute(
+        "SELECT * FROM expenses WHERE id = ?", (item_id,)
+    ).fetchone()
 
     fields = []
     values = []
@@ -187,24 +245,61 @@ def update_expense(item_id: int, item: ExpenseUpdateItem):
 
     if not fields:
         conn.close()
+        oplog.log_db("UPDATE", TABLE, f"修改账单 id={item_id}：未提交任何变更", row_id=item_id)
         return {"status": "no_changes"}
 
     values.append(item_id)
     sql = f"UPDATE expenses SET {', '.join(fields)} WHERE id = ?"
     cursor.execute(sql, values)
+    affected = cursor.rowcount
     conn.commit()
     conn.close()
-    return {"status": "success"}
+
+    # ---- 操作日志：修改账单条目（逐字段记录 旧值 -> 新值）----
+    changes = {}
+    for k in item.model_dump(exclude_unset=True):
+        if before is not None and dict(before).get(k) != getattr(item, k, None):
+            changes[k] = {
+                "from": dict(before).get(k) if before is not None else None,
+                "to": getattr(item, k, None),
+            }
+    change_text = "，".join(f"{k}: {v['from']} -> {v['to']}" for k, v in changes.items())
+    oplog.log_db(
+        "UPDATE", TABLE,
+        f"修改账单 id={item_id}：{change_text or '值未发生实际变化'}",
+        row_id=item_id,
+        matched=affected,
+        changes=changes,
+    )
+    return {"status": "success", "matched": affected}
 
 
 @db_router.delete("/expenses/{item_id}")
 def delete_expense(item_id: int):
     conn = get_db()
     cursor = conn.cursor()
+
+    # 删除前留存整条记录的快照，用于事后审计与恢复
+    snapshot = cursor.execute(
+        "SELECT * FROM expenses WHERE id = ?", (item_id,)
+    ).fetchone()
+
     cursor.execute("DELETE FROM expenses WHERE id = ?", (item_id,))
+    affected = cursor.rowcount
     conn.commit()
     conn.close()
-    return {"status": "deleted"}
+
+    # ---- 操作日志：删除账单条目 ----
+    oplog.log_db(
+        "DELETE", TABLE,
+        f"删除账单 id={item_id}"
+        + (f"：{dict(snapshot).get('日期', '')} {dict(snapshot).get('分类', '')} "
+           f"{dict(snapshot).get('品名', '')} 金额={dict(snapshot).get('实际金额', '')}" if snapshot else "（记录不存在）"),
+        row_id=item_id,
+        matched=affected,
+        deleted_snapshot=dict(snapshot) if snapshot else None,
+    )
+    return {"status": "deleted", "matched": affected}
 
 
 @db_router.get("/export_excel")
@@ -257,6 +352,14 @@ def export_expenses_to_excel(
     headers = {
         "Content-Disposition": f"attachment; filename*=utf-8''{encoded_filename}"
     }
+
+    # ---- 操作日志：导出 Excel ----
+    oplog.log_db(
+        "EXPORT", TABLE,
+        f"导出账单 Excel（{len(rows)} 条）",
+        result_count=len(rows),
+        filename=filename,
+    )
 
     return StreamingResponse(
         output,

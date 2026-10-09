@@ -1,6 +1,7 @@
 # server.py
 import os
 import sqlite3
+import time
 from typing import Optional
 from urllib.parse import quote
 from contextlib import asynccontextmanager
@@ -11,8 +12,10 @@ from fastapi.responses import RedirectResponse, JSONResponse
 
 # 引入项目核心模块
 import analyze
+import logger as oplog
 from db_manager import DB_PATH, db_router
 from ai_assistant import ai_router
+from log_router import log_router
 from auth import (
     auth_router,
     init_auth_db,
@@ -30,6 +33,32 @@ PUBLIC_PATHS = {
     "/favicon.ico",
     "/api/auth/login",
 }
+
+# 操作日志相关接口自身不写访问日志，避免日志查看动作把日志越写越大
+LOG_PATH_PREFIX = "/api/logs"
+
+# 不记录访问日志的静态资源后缀（图片、字体等噪音较大，且非业务操作）
+STATIC_LOG_EXCLUDE_EXT = {
+    ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    ".woff", ".woff2", ".ttf", ".eot", ".map",
+}
+
+
+def _client_ip(request: Request) -> str:
+    """取出真实来源 IP，兼容反向代理"""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "-"
+
+
+def _summarize_query(request: Request) -> str:
+    """把查询参数压缩成一行摘要，写进访问日志的 detail 字段"""
+    raw = request.url.query
+    if not raw:
+        return ""
+    text = raw if len(raw) <= 300 else raw[:300] + "…(截断)"
+    return text
 
 
 def ensure_db_initialized():
@@ -71,6 +100,17 @@ def ensure_db_initialized():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI 生命周期管理器：在应用启动时统一执行自检与预分析"""
+    # 0. 日志系统自检：确保 logs/ 目录存在并写入一条启动记录
+    os.makedirs(oplog.LOG_DIR, exist_ok=True)
+    oplog.install_excepthook()
+    oplog.install_signal_handlers()
+    oplog.log(
+        f"服务启动：日志目录 {oplog.LOG_DIR}，滚动周期 "
+        f"{oplog.ROTATE_SECONDS // 86400} 天/文件，"
+        f"单文件上限 {oplog.SIZE_LIMIT // 1024 // 1024} MB",
+        op="system", op_type="INIT", table="system",
+    )
+
     # 1. 自检并建立空库/空表
     ensure_db_initialized()
 
@@ -89,7 +129,9 @@ async def lifespan(app: FastAPI):
         print(f">>> [System Warning] 首次聚合缓存生成跳过（可能暂无数据）: {e}")
 
     yield
-    # 4. 服务关闭时的清理动作（如需）写在 yield 之后
+    # 4. 服务关闭：把当前日志文件归档重命名（起止时间）后落盘
+    oplog.log("服务关闭：日志文件即将归档", op="system", op_type="INIT", table="system")
+    oplog.close()
 
 
 app = FastAPI(
@@ -105,6 +147,76 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def operation_logger(request: Request, call_next):
+    """统一操作日志中间件
+
+    对所有 HTTP 请求记录：时间戳（0.01 秒精度）、操作账号、操作内容
+    （方法 + 路径 + 查询参数）、来源 IP、响应状态码与耗时。
+
+    该中间件注册在 auth_gate 之前，因此请求先经过日志记录、再由鉴权闸门
+    处理，未登录被拦截的请求同样会留下访问记录。
+    """
+    path = request.url.path
+
+    # 日志接口自身、静态资源噪音不记录，避免日志自我膨胀
+    if path.startswith(LOG_PATH_PREFIX) or os.path.splitext(path)[1].lower() in STATIC_LOG_EXCLUDE_EXT:
+        return await call_next(request)
+
+    started = time.perf_counter()
+    user = get_user_from_request(request)
+    account = user["username"] if user else "anonymous"
+
+    # 把请求上下文写入 ContextVar，业务函数内的日志会自动带上账号与来源
+    token = oplog._request_ctx.set({})
+    oplog.set_request_context(
+        account=account, ip=_client_ip(request),
+        method=request.method, path=path,
+    )
+    response = None
+    try:
+        response = await call_next(request)
+
+        elapsed = (time.perf_counter() - started) * 1000
+        status = response.status_code
+
+        # 静态页面/资源只记录到「页面访问」粒度，接口请求记录得完整一些
+        if path.startswith("/api/"):
+            action = f"访问接口 {request.method} {path}"
+            if status >= 500:
+                action = f"接口异常 {request.method} {path}"
+            elif status in (401, 403):
+                action = f"访问被拒绝 {request.method} {path}"
+        else:
+            action = f"访问页面 {request.method} {path}"
+
+        # 此时上下文仍然有效，ip / method / path 会自动带上
+        oplog.log(
+            action,
+            op=account,
+            op_type="ACCESS",
+            result="success" if status < 400 else ("denied" if status in (401, 403) else "failed"),
+            status_code=status,
+            elapsed_ms=round(elapsed, 2),
+            detail=_summarize_query(request),
+            user_agent=(request.headers.get("user-agent", "") or "")[:120] or None,
+        )
+    except Exception as e:
+        elapsed = (time.perf_counter() - started) * 1000
+        oplog.log(
+            f"请求处理异常：{request.method} {path} -> {type(e).__name__}: {e}",
+            op=account, op_type="ERROR", result="exception",
+            status_code=500, elapsed_ms=round(elapsed, 2), detail=_summarize_query(request),
+        )
+        raise
+    finally:
+        # 必须等 call_next 完全结束、本中间件的日志也写完之后再重置上下文，
+        # 否则日志会丢失 ip / method / path
+        oplog._request_ctx.reset(token)
+
+    return response
 
 
 @app.middleware("http")
@@ -137,6 +249,7 @@ async def auth_gate(request, call_next):
 app.include_router(auth_router)
 app.include_router(db_router, dependencies=[Depends(require_user)])
 app.include_router(ai_router, dependencies=[Depends(require_user)])
+app.include_router(log_router, dependencies=[Depends(require_user)])
 
 
 # 查询数据库里已有所有月份（格式如 ["2026-09", "2026-10"]）
@@ -184,6 +297,11 @@ def trigger_refresh(
         month=month,
     )
     if data:
+        oplog.log(
+            f"重新生成分析缓存：[{label}]，预算基线 ¥{monthly_budget}",
+            op=_user.get("username", "system"), op_type="ACCESS",
+            table="expenses", label=label, monthly_budget=monthly_budget,
+        )
         return {
             "status": "success",
             "message": f"[{label}] 分析已重新生成，预算基线: ¥{monthly_budget}",

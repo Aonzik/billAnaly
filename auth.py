@@ -16,8 +16,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
+import logger as oplog
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AUTH_DB_PATH = os.path.join(BASE_DIR, "users.db")
+TABLE = "users"
 
 COOKIE_NAME = "bill_auth"
 SESSION_TTL = 7 * 24 * 3600          # 会话有效期：7 天
@@ -42,6 +45,27 @@ def get_conn() -> sqlite3.Connection:
 
 def _now_str() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _client_ip(request: Optional[Request]) -> str:
+    """尽力取出真实来源 IP（兼容反向代理的 X-Forwarded-For）"""
+    if request is None:
+        return "-"
+    try:
+        fwd = request.headers.get("x-forwarded-for", "")
+        if fwd:
+            return fwd.split(",")[0].strip()
+        return request.client.host if request.client else "-"
+    except Exception:
+        return "-"
+
+
+def _log(action: str, op: str, **fields):
+    """账号模块统一日志出口，自动补上来源 IP"""
+    try:
+        oplog.log(action, op=op, **fields)
+    except Exception as e:
+        print(f"[Auth Warning] 日志写入失败: {e}")
 
 
 def init_auth_db() -> None:
@@ -85,9 +109,17 @@ def init_auth_db() -> None:
             f">>> [Auth Init] 已创建默认管理员账号：{DEFAULT_ADMIN_USERNAME} / "
             f"{DEFAULT_ADMIN_PASSWORD}（请登录后尽快修改密码）"
         )
+        _log(
+            f"初始化账号库：植入默认管理员账号「{DEFAULT_ADMIN_USERNAME}」（角色=admin）",
+            op="system", op_type="CREATE", table=TABLE,
+            target_user=DEFAULT_ADMIN_USERNAME, role="admin", bootstrap=True,
+        )
 
     conn.commit()
     conn.close()
+
+    _log(f"账号库自检完成（users.db），当前账号总数 {total + (1 if total == 0 else 0)}",
+         op="system", op_type="INIT", table=TABLE)
 
 
 # -----------------------------------------------------------------------------
@@ -201,12 +233,24 @@ def get_user_from_request(request: Request) -> Optional[dict]:
 def require_user(request: Request) -> dict:
     user = get_user_from_request(request)
     if user is None:
+        # 记录越权尝试，便于排查会话失效与未登录访问
+        oplog.log(
+            f"拒绝访问：未登录或会话已过期（{request.method} {request.url.path}）",
+            op="anonymous", op_type="ACCESS", table="sessions",
+            result="denied", status_code=401,
+            ip=_client_ip(request), method=request.method, path=request.url.path,
+        )
         raise HTTPException(status_code=401, detail="未登录或登录已过期，请重新登录")
     return user
 
 
 def require_admin(user: dict = Depends(require_user)) -> dict:
     if user.get("role") != "admin":
+        oplog.log(
+            f"拒绝访问：非管理员尝试执行管理员操作",
+            op=user.get("username", "anonymous"), op_type="ACCESS", table=TABLE,
+            result="denied", status_code=403, role=user.get("role"),
+        )
         raise HTTPException(status_code=403, detail="仅管理员可执行此操作")
     return user
 
@@ -239,8 +283,9 @@ class ChangePasswordBody(BaseModel):
 # 接口：登录 / 登出 / 当前用户
 # -----------------------------------------------------------------------------
 @auth_router.post("/login")
-def login(body: LoginBody, response: Response):
+def login(body: LoginBody, response: Response, request: Request):
     username = (body.username or "").strip()
+    ip = _client_ip(request)
     if not username or not body.password:
         raise HTTPException(status_code=400, detail="账号和密码不能为空")
 
@@ -249,6 +294,8 @@ def login(body: LoginBody, response: Response):
     conn.close()
 
     if row is None or not verify_password(body.password, row["password_hash"]):
+        _log(f"登录失败：账号或密码错误（尝试账号 {username}）", op=username,
+             op_type="LOGIN", table=TABLE, result="failed", ip=ip)
         raise HTTPException(status_code=401, detail="账号或密码错误")
 
     token = create_session(row["id"])
@@ -260,13 +307,21 @@ def login(body: LoginBody, response: Response):
         samesite="lax",
         path="/",
     )
+    _log(f"登录成功，角色 {row['role']}", op=row["username"],
+         op_type="LOGIN", table=TABLE, result="success", role=row["role"],
+         user_id=row["id"], ip=ip)
     return {"status": "success", "token": token, "username": row["username"], "role": row["role"]}
 
 
 @auth_router.post("/logout")
 def logout(request: Request, response: Response):
+    user = get_user_from_request(request)
+    ip = _client_ip(request)
     drop_session(_token_from_headers(request.headers))
     response.delete_cookie(COOKIE_NAME, path="/")
+    _log(f"退出登录（会话已销毁）",
+         op=(user or {}).get("username") or "anonymous",
+         op_type="LOGOUT", table="sessions", ip=ip)
     return {"status": "success"}
 
 
@@ -285,6 +340,8 @@ def list_users(admin: dict = Depends(require_admin)):
         "SELECT id, username, role, created_by, created_at FROM users ORDER BY id"
     ).fetchall()
     conn.close()
+    _log(f"查询账号列表，共 {len(rows)} 个账号", op=admin["username"],
+         op_type="QUERY", table=TABLE, result_count=len(rows))
     return [dict(r) for r in rows]
 
 
@@ -303,13 +360,18 @@ def create_user(body: CreateUserBody, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=400, detail=f"账号「{username}」已存在")
 
     salt, pwd_hash = hash_password(body.password)
-    conn.execute(
+    cur = conn.execute(
         "INSERT INTO users (username, password_hash, role, created_by, created_at)"
         " VALUES (?, ?, 'user', ?, ?)",
         (username, f"{salt}${pwd_hash}", admin["username"], _now_str()),
     )
+    new_id = cur.lastrowid
     conn.commit()
     conn.close()
+    # 日志只记录账号名与角色，绝不记录任何形式的密码（含明文与哈希）
+    _log(f"新增账号「{username}」，角色=user，创建者={admin['username']}",
+         op=admin["username"], op_type="CREATE", table=TABLE,
+         target_user=username, target_user_id=new_id, role="user")
     return {"status": "success", "username": username}
 
 
@@ -319,7 +381,7 @@ def delete_user(user_id: int, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=400, detail="不能删除当前登录的账号")
 
     conn = get_conn()
-    target = conn.execute("SELECT id, role FROM users WHERE id = ?", (user_id,)).fetchone()
+    target = conn.execute("SELECT id, role, username FROM users WHERE id = ?", (user_id,)).fetchone()
     if target is None:
         conn.close()
         raise HTTPException(status_code=404, detail="账号不存在")
@@ -336,6 +398,9 @@ def delete_user(user_id: int, admin: dict = Depends(require_admin)):
     conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+    _log(f"删除账号「{target['username']}」(id={user_id})，其全部会话已强制下线",
+         op=admin["username"], op_type="DELETE", table=TABLE,
+         target_user=target["username"], target_user_id=user_id, role=target["role"])
     return {"status": "success"}
 
 
@@ -356,8 +421,12 @@ def change_username(body: ChangeUsernameBody, user: dict = Depends(require_user)
         conn.close()
         raise HTTPException(status_code=400, detail="当前密码错误")
 
-    if new_username == row["username"]:
+    old_username = row["username"]
+
+    if new_username == old_username:
         conn.close()
+        _log(f"修改账号名：新旧名称相同（{new_username}），未产生变更",
+             op=old_username, op_type="RENAME", table=TABLE, result="no_changes")
         return {"status": "success", "username": new_username}
 
     dup = conn.execute(
@@ -370,6 +439,9 @@ def change_username(body: ChangeUsernameBody, user: dict = Depends(require_user)
     conn.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user["id"]))
     conn.commit()
     conn.close()
+    _log(f"修改账号名：{old_username} -> {new_username}",
+         op=old_username, op_type="RENAME", table=TABLE,
+         old_username=old_username, new_username=new_username, user_id=user["id"])
     return {"status": "success", "username": new_username}
 
 
@@ -396,4 +468,12 @@ def change_password(body: ChangePasswordBody, user: dict = Depends(require_user)
 
     # 密码已变更，强制所有会话（含当前）下线，要求重新登录
     drop_user_sessions(user["id"])
+    # 只记录「密码已修改」这一事实与强度提示，绝不落盘密码本身
+    _log(
+        f"修改登录密码成功（账号 {row['username']}），"
+        f"强度={len(body.new_password)}位，全部会话已强制失效，需重新登录",
+        op=row["username"], op_type="PASSWORD", table=TABLE,
+        user_id=user["id"], password_length=len(body.new_password),
+        sessions_revoked=True,
+    )
     return {"status": "success", "message": "密码修改成功，请使用新密码重新登录"}
