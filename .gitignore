@@ -27,6 +27,7 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+.mplconfig/
 
 # 本地 js 资源
 static/js/*.js
