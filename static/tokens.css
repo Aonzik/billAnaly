@@ -1,0 +1,69 @@
+/* ============================================================
+   BillAnaly Design Tokens — Fintech Minimal Light Theme
+   ============================================================ */
+:root {
+  /* —— Color: Primary (Stripe Purple-Blue) —— */
+  --color-primary:       #635BFF;
+  --color-primary-dark:  #4F46E5;
+  --color-primary-light: #818CF8;
+  --color-primary-bg:    #EEF2FF;
+
+  /* —— Color: Neutral / Slate —— */
+  --color-bg:            #F8FAFC;
+  --color-surface:       #FFFFFF;
+  --color-border:        #E2E8F0;
+  --color-border-soft:   #F1F5F9;
+
+  /* —— Color: Text —— */
+  --color-text-primary:   #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-tertiary:  #94A3B8;
+
+  /* —— Color: Semantic —— */
+  --color-danger:      #EF4444;
+  --color-danger-bg:   #FEF2F2;
+  --color-danger-border:#FECACA;
+  --color-success:     #10B981;
+  --color-success-bg:  #ECFDF5;
+  --color-success-border:#A7F3D0;
+  --color-warning:     #F59E0B;
+  --color-warning-bg:  #FFFBEB;
+  --color-warning-border:#FDE68A;
+  --color-info:        #3B82F6;
+  --color-info-bg:     #EFF6FF;
+  --color-info-border: #BFDBFE;
+
+  /* —— Shadow —— */
+  --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md: 0 4px 6px rgba(15,23,42,0.05), 0 2px 4px rgba(15,23,42,0.04);
+  --shadow-lg: 0 10px 15px rgba(15,23,42,0.06), 0 4px 6px rgba(15,23,42,0.04);
+  --shadow-xl: 0 20px 25px rgba(15,23,42,0.07), 0 8px 10px rgba(15,23,42,0.04);
+
+  /* —— Radius —— */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
+  --radius-pill: 9999px;
+
+  /* —— Typography —— */
+  --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+               "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+
+  /* —— Transition —— */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+
+  /* —— Chart Palette (Semantic & High Distinction) —— */
+  --chart-1: #F97316; /* 饮食 (橙) */
+  --chart-2: #635BFF; /* 交通 (紫蓝) */
+  --chart-3: #10B981; /* 日用 (翠绿) */
+  --chart-4: #854D0E; /* 居住 (暖木褐) */
+  --chart-5: #06B6D4; /* 花呗 (青蓝) */
+  --chart-6: #F59E0B; /* 饮食* (琥珀黄) */
+  --chart-7: #8B5CF6; /* 娱乐 (紫罗兰) */
+  --chart-8: #EC4899; /* 周边 (玫粉) */
+  --chart-9: #3B82F6; /* 数字 (天蓝) */
+  --chart-10:#EF4444; /* 医疗 (朱红) */
+}

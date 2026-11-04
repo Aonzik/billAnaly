@@ -3,68 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 · 智能个人财务分析系统</title>
+    <title>登录 · BillAnaly</title>
     <link rel="icon" href="favicon.ico">
     <style>
+        @import url("tokens.css");
         * { box-sizing: border-box; }
-        html, body { height: 100%; }
+        html, body { height: 100%; margin: 0; }
         body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 55%, #1e3a8a 100%);
-            display: flex; align-items: center; justify-content: center;
-            padding: 24px; color: #334155;
+            font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+                         "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #EEF2FF 0%, #F8FAFC 55%, #E0E7FF 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            color: #334155;
+            min-height: 100vh;
         }
         .login-card {
-            width: 100%; max-width: 380px;
-            background: #fff; border-radius: 14px;
-            box-shadow: 0 18px 50px rgba(2, 6, 23, 0.45);
-            padding: 34px 30px 28px;
+            width: 100%;
+            max-width: 380px;
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 20px 40px rgba(99,91,255,0.08), 0 4px 12px rgba(15,23,42,0.06);
+            padding: 36px 32px 30px;
         }
-        .brand { text-align: center; margin-bottom: 26px; }
-        .brand .logo { font-size: 40px; line-height: 1; }
-        .brand h1 { font-size: 19px; margin: 12px 0 6px; color: #0f172a; }
-        .brand p { font-size: 12.5px; color: #94a3b8; margin: 0; }
-        .form-group { margin-bottom: 15px; }
+        .brand {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .brand .logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, #635BFF, #818CF8);
+            border-radius: 14px;
+            font-size: 24px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 12px rgba(99,91,255,0.3);
+        }
+        .brand h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 6px;
+            color: #0F172A;
+            letter-spacing: -0.3px;
+        }
+        .brand p {
+            font-size: 12.5px;
+            color: #94A3B8;
+            margin: 0;
+        }
+        .form-group { margin-bottom: 14px; }
         .form-group label {
-            display: block; font-size: 12.5px; font-weight: 600;
-            color: #64748b; margin-bottom: 6px;
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748B;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
         }
         .form-group input {
-            width: 100%; padding: 11px 13px; font-size: 14px;
-            border: 1px solid #cbd5e1; border-radius: 8px; outline: none;
-            transition: border-color 0.15s, box-shadow 0.15s;
+            width: 100%;
+            padding: 11px 13px;
+            font-size: 14px;
+            font-family: inherit;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            outline: none;
+            color: #0F172A;
+            background: #FAFAFA;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
         }
         .form-group input:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            border-color: #635BFF;
+            box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.12);
+            background: #fff;
         }
         .btn-login {
-            width: 100%; margin-top: 8px; padding: 12px;
-            background: #2563eb; color: #fff; font-size: 15px; font-weight: 700;
-            border: none; border-radius: 8px; cursor: pointer;
-            transition: background 0.15s;
+            width: 100%;
+            margin-top: 10px;
+            padding: 12px;
+            background: #635BFF;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: inherit;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            letter-spacing: 0.2px;
         }
-        .btn-login:hover { background: #1d4ed8; }
-        .btn-login:disabled { background: #93c5fd; cursor: not-allowed; }
+        .btn-login:hover  { background: #4F46E5; }
+        .btn-login:active { transform: scale(0.99); }
+        .btn-login:disabled { background: #A5B4FC; cursor: not-allowed; }
         .msg {
-            display: none; margin-top: 14px; padding: 10px 12px;
-            border-radius: 8px; font-size: 13px; line-height: 1.5;
+            display: none;
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
         }
-        .msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-        .msg.ok { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .msg.error { display: block; background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+        .msg.ok    { display: block; background: #ECFDF5; color: #15803D; border: 1px solid #A7F3D0; }
         .hint {
-            margin-top: 22px; padding-top: 16px; border-top: 1px dashed #e2e8f0;
-            font-size: 12px; color: #94a3b8; line-height: 1.6; text-align: center;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #F1F5F9;
+            font-size: 12px;
+            color: #94A3B8;
+            line-height: 1.6;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 <div class="login-card">
     <div class="brand">
-        <div class="logo">💰</div>
-        <h1>智能个人财务分析系统</h1>
-        <p>请登录后使用，未登录无法查看任何页面</p>
+        <div class="logo">💎</div>
+        <h1>BillAnaly</h1>
+        <p>个人财务行为分析系统</p>
     </div>
 
     <form id="login-form" autocomplete="on">
@@ -94,7 +158,6 @@
     const msgBox = document.getElementById('msg');
     const btn = document.getElementById('btn-submit');
 
-    // 支持 ?next=/manager.html 登录后回跳原目标页面
     const params = new URLSearchParams(window.location.search);
     const nextUrl = params.get('next');
 
@@ -104,19 +167,17 @@
     }
 
     function safeNext() {
-        // 仅允许站内相对路径，防止开放重定向
         if (!nextUrl) return '/dashboard.html';
         if (!nextUrl.startsWith('/') || nextUrl.startsWith('//')) return '/dashboard.html';
         if (nextUrl.startsWith('/login.html')) return '/dashboard.html';
         return nextUrl;
     }
 
-    // 若已登录则直接进入系统，避免重复登录
     (async () => {
         try {
             const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
             if (res.ok) window.location.replace(safeNext());
-        } catch (e) { /* 未登录，正常停留在登录页 */ }
+        } catch (e) { /* 未登录，正常停留 */ }
     })();
 
     form.addEventListener('submit', async (e) => {
@@ -152,7 +213,7 @@
             try {
                 const err = await res.json();
                 if (err && err.detail) detail = err.detail;
-            } catch (e) { /* 忽略解析异常 */ }
+            } catch (e) { /* 忽略 */ }
             showMsg(detail);
         } catch (err) {
             showMsg('网络异常，无法连接服务器，请稍后重试');

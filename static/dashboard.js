@@ -1,17 +1,98 @@
-// 统一定义一套美观、区分度高的分类配色板 (20色)
-const CATEGORY_PALETTE = [
-    '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
-    '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#48b8d0',
-    '#e062ae', '#673ab7', '#009688', '#ff9800', '#795548',
-    '#607d8b', '#26a69a', '#8d6e63', '#ab47bc', '#5c6bc0'
+// ============================================================
+// 分类色彩系统：核心分类专属语义映射 + 长尾分类冷暖跳跃调色板
+// ============================================================
+
+// 1. 核心消费分类专属语义色（彻底解决高频分类扎堆撞色）
+const SEMANTIC_CATEGORY_MAP = {
+    '饮食':   '#F97316',  // 活力珊瑚橙 (暖色 H25) — 高频日常烟火气
+    '饮食*':  '#F59E0B',  // 拿铁琥珀黄 (暖色 H38) — 拿铁/零食因子，同属就餐但阶梯清晰
+    '交通':   '#635BFF',  // 主品牌紫蓝 (冷色 H265) — 理性通勤，Stripe 主题色
+    '日用':   '#10B981',  // 清新翠绿 (冷/中性 H160) — 彻底告别紫色！生机明朗
+    '居住':   '#854D0E',  // 典雅暖木褐/砖木棕 (暖中性偏深 H32) — 不动产刚需，解耦内环刚性灰色
+    '房租':   '#854D0E',  // 房租别名
+    '花呗':   '#06B6D4',  // 数智青蓝/湖蓝 (冷色 H191) — 金融信贷理性还款，告别橙红
+    '娱乐':   '#8B5CF6',  // 优雅紫罗兰 (中性 H258) — 休闲放松
+    '数字':   '#3B82F6',  // 科技天蓝 (冷色 H217) — 订阅与数码
+    '数码':   '#3B82F6',  // 数码别名
+    '周边':   '#EC4899',  // 潮流玫粉 (暖色 H330) — 潮玩文创独立色彩
+    '医疗':   '#EF4444',  // 警示朱红 (H0) — 健康医药应急
+    '服饰':   '#A855F7',  // 时尚亮紫
+    '教育':   '#14B8A6',  // 学习蓝绿
+    '转账':   '#64748B',  // 中性灰蓝
+};
+
+// 2. 长尾与动态分类兜底调色板（冷暖大交替序列，色距间隔 > 60°）
+const DYNAMIC_PALETTE = [
+    '#0284C7',  // 天蓝 (冷)
+    '#F43F5E',  // 玫瑰红 (暖)
+    '#14B8A6',  // 蓝绿 (冷)
+    '#D97706',  // 赭石金 (暖)
+    '#A855F7',  // 亮紫 (中)
+    '#84CC16',  // 黄绿 (冷暖中性)
+    '#6366F1',  // 靛青 (冷)
+    '#FB923C',  // 杏橙 (暖)
+    '#2DD4BF',  // 浅水绿 (冷)
+    '#E11D48',  // 绯红 (暖)
+    '#38BDF8',  // 冰天蓝 (冷)
+    '#FB7185',  // 珊瑚粉 (暖)
+    '#A3E635',  // 柠檬绿 (中)
+    '#C084FC',  // 淡香芋紫 (冷)
+    '#FBBF24',  // 暖亮金 (暖)
 ];
 
-// 基于所有分类名生成稳定的 { 分类名: 颜色 } 字典
+// 向后兼容旧名称
+const CATEGORY_PALETTE = DYNAMIC_PALETTE;
+
+// 3. 基于语义字典与动态分配生成稳定的 { 分类名: 颜色 } 字典
 function buildCategoryColorMap(allCategories) {
     const colorMap = {};
-    allCategories.forEach((cat, index) => {
-        colorMap[cat] = CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
+    let dynamicIdx = 0;
+
+    (allCategories || []).forEach(cat => {
+        if (!cat) return;
+        const name = String(cat).trim();
+
+        // 优先完全匹配预设语义字典
+        if (SEMANTIC_CATEGORY_MAP[name]) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP[name];
+            return;
+        }
+
+        // 模糊匹配前缀或常见关键词
+        if (name.startsWith('饮食*')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['饮食*'];
+            return;
+        } else if (name.startsWith('饮食') || name.includes('餐饮') || name.includes('外卖')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['饮食'];
+            return;
+        } else if (name.includes('交通') || name.includes('地铁') || name.includes('打车') || name.includes('公交')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['交通'];
+            return;
+        } else if (name.includes('居住') || name.includes('房租') || name.includes('物业') || name.includes('水电')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['居住'];
+            return;
+        } else if (name.includes('花呗') || name.includes('信用卡') || name.includes('还款')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['花呗'];
+            return;
+        } else if (name.includes('日用') || name.includes('超市') || name.includes('百货')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['日用'];
+            return;
+        } else if (name.includes('娱乐') || name.includes('电影') || name.includes('游戏')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['娱乐'];
+            return;
+        } else if (name.includes('数字') || name.includes('数码') || name.includes('软件')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['数字'];
+            return;
+        } else if (name.includes('周边') || name.includes('潮玩')) {
+            colorMap[cat] = SEMANTIC_CATEGORY_MAP['周边'];
+            return;
+        }
+
+        // 未命中语义规则的长尾动态分类，使用冷暖交替跳跃调色板
+        colorMap[cat] = DYNAMIC_PALETTE[dynamicIdx % DYNAMIC_PALETTE.length];
+        dynamicIdx++;
     });
+
     return colorMap;
 }
 
@@ -173,7 +254,7 @@ function renderBarLineChart(data, colorMap) {
             text: '累计 ' + cumLast.real.toFixed(1) + '%   ¥' + cumLast.money.toFixed(0)
                 + ' / ¥' + monthlyBudget.toFixed(0)
                 + (cumOverBudget ? '   ▲ 已超预算' : ''),
-            fill: cumOverBudget ? '#ef4444' : '#2563eb',
+            fill: cumOverBudget ? '#EF4444' : '#635BFF',
             font: 'bold 12px sans-serif',
             backgroundColor: 'rgba(255,255,255,0.88)',
             padding: [2, 4]
@@ -216,13 +297,13 @@ function renderBarLineChart(data, colorMap) {
         name: '每日净支出走势',
         type: 'line',
         data: data.daily_trend.net_expenses,
-        lineStyle: { color: '#c0392b', width: 3 },
-        itemStyle: { color: '#c0392b' },
+        lineStyle: { color: '#EF4444', width: 3 },
+        itemStyle: { color: '#EF4444' },
         markLine: {
             data: [{
                 yAxis: safeBaseline,
                 name: '建议日均线',
-                lineStyle: { color: '#27ae60', type: 'dashed', width: 2 },
+                lineStyle: { color: '#10B981', type: 'dashed', width: 2 },
                 label: { formatter: '安全基准: ¥' + safeBaseline.toFixed(1) }
             }]
         }
@@ -493,11 +574,13 @@ function renderDonutChart(data, colorMap) {
     const chartDom = document.getElementById('nestedDonutChart');
     if (!chartDom) return;
     const chart = echarts.init(chartDom);
-    // 1. 内环数据：固定赋予高质感的主题色，区分刚性与弹性
+    // 1. 内环数据：深邃藏青黑(刚性) vs 清爽海天蓝(弹性)，解耦外环分类
     const innerData = (data.donut_chart.inner || []).map(item => ({
         ...item,
         itemStyle: {
-            color: item.name.includes('刚性') ? '#475569' : '#0284c7'
+            color: item.name.includes('刚性') ? '#1E293B' : '#0284c7',
+            borderColor: '#ffffff',
+            borderWidth: 2
         }
     }));
 
@@ -549,10 +632,28 @@ function renderDonutChart(data, colorMap) {
                 },
                 label: {
                     position: 'inner',
-                    fontSize: 11,
-                    fontWeight: 'bold',
-                    color: '#000000',
-                    formatter: '{b}\n{d}%'
+                    show: true,
+                    formatter: '{name|{b}}\n{percent|{d}%}',
+                    rich: {
+                        name: {
+                            fontSize: 11,
+                            fontWeight: 500,
+                            color: '#FFFFFF',
+                            lineHeight: 16,
+                            align: 'center',
+                            textShadowColor: 'rgba(0, 0, 0, 0.45)',
+                            textShadowBlur: 2
+                        },
+                        percent: {
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: '#FFFFFF',
+                            lineHeight: 18,
+                            align: 'center',
+                            textShadowColor: 'rgba(0, 0, 0, 0.45)',
+                            textShadowBlur: 2
+                        }
+                    }
                 },
                 labelLine: { show: false },
                 data: innerData

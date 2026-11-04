@@ -3,33 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>账单支出分析仪表盘 (交互版)</title>
+    <title>仪表盘 · BillAnaly</title>
+    <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
-    <!-- 引入 Apache ECharts -->
+    <!-- Apache ECharts -->
     <script src="js/echarts.min.js"
-    oneerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js\'><\/script>')"></script>
+    onerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js\'><\/script>')"></script>
     <script src="js/marked.min.js"
-    oneerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/marked/marked.min.js\'><\/script>')"></script>
-    <!-- 引入 ECharts WordCloud 扩展组件 -->
+    onerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/marked/marked.min.js\'><\/script>')"></script>
+    <!-- ECharts WordCloud -->
     <script src="js/echarts-wordcloud.min.js"
-    oneerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js\'><\/script>')"></script>
+    onerror="this.onerror=null; document.write('<script src=\'https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js\'><\/script>')"></script>
 </head>
 <body>
+    <!-- 统一顶部导航 -->
+    <nav class="topbar">
+        <a href="/dashboard.html" class="topbar-brand">💎 BillAnaly</a>
+        <div class="topbar-nav">
+            <a href="/dashboard.html" class="active">仪表盘</a>
+            <a href="/manager.html">记账管理</a>
+            <a href="/account.html">账号</a>
+            <a href="/logs.html" id="nav-logs" style="display:none;">日志</a>
+        </div>
+        <div class="topbar-actions">
+            <button class="btn-danger btn-sm" onclick="logout()">退出登录</button>
+        </div>
+    </nav>
+
     <!-- 顶部综合指标看板 -->
     <div class="header">
-        <h2>📊 月度个人财务与消费行为看板</h2>
+        <h2>月度个人财务与消费行为看板</h2>
         <div class="stat-grid" id="kpi-cards">
             <!-- 1：月度总支出 -->
-            <div class="metric-card">
+            <div class="metric-card accent-danger">
                 <div class="metric-title">
                     <span>月度总支出</span>
                     <span class="sub-tag">EX + AR - AP</span>
                 </div>
-                <div class="metric-value" id="card-total-expense" style="color: #dc2626;">¥0.00</div>
+                <div class="metric-value" id="card-total-expense" style="color: var(--color-danger);">¥0.00</div>
                 <div class="metric-hint" id="card-expense-hint">含垫付冲抵后真实支出</div>
             </div>
             <!-- 2：月度资产净增长 -->
-            <div class="metric-card">
+            <div class="metric-card accent-success">
                 <div class="metric-title">
                     <span>月度资产净增长</span>
                     <span class="sub-tag">IN - 支出</span>
@@ -38,74 +54,77 @@
                 <div class="metric-hint" id="card-growth-hint">当月资金净结余</div>
             </div>
             <!-- 3：待收回垫付 -->
-            <div class="metric-card">
+            <div class="metric-card accent-info">
                 <div class="metric-title">
                     <span>待收回垫付</span>
                     <span class="sub-tag">AR - AP</span>
                 </div>
-                <div class="metric-value" id="card-pending-recovery" style="color: #2563eb;">¥0.00</div>
+                <div class="metric-value" id="card-pending-recovery" style="color: var(--color-info);">¥0.00</div>
                 <div class="metric-hint" id="card-recovery-hint">尚未回款的外借/代付</div>
             </div>
             <!-- 4：下月待还花呗 -->
-            <div class="metric-card">
+            <div class="metric-card accent-warning">
                 <div class="metric-title"><span>下月待还花呗</span></div>
-                <div class="metric-value" id="card-hb-need-pay" style="color: #e67e22;">¥0.00</div>
+                <div class="metric-value" id="card-hb-need-pay" style="color: var(--color-warning);">¥0.00</div>
             </div>
             <!-- 5：建议今日起可用日均 -->
-            <div class="metric-card">
+            <div class="metric-card accent-success">
                 <div class="metric-title"><span>建议今日起可用日均</span></div>
-                <div class="metric-value" id="card-dynamic-budget" style="color: #27ae60;">¥0.0/天</div>
+                <div class="metric-value" id="card-dynamic-budget" style="color: var(--color-success);">¥0.0/天</div>
             </div>
             <!-- 6：基准安全日均 -->
-            <div class="metric-card">
+            <div class="metric-card accent-primary">
                 <div class="metric-title"><span>基准安全日均</span></div>
                 <div class="metric-value" id="card-baseline-budget">¥0.0/天</div>
             </div>
             <!-- 7：拿铁因子 -->
-            <div class="metric-card">
+            <div class="metric-card accent-danger">
                 <div class="metric-title"><span>拿铁因子（饮食*累计）</span></div>
-                <div class="metric-value" id="card-latte-cost" style="color: #c0392b;">¥0.0</div>
+                <div class="metric-value" id="card-latte-cost" style="color: var(--color-danger);">¥0.0</div>
             </div>
         </div>
     </div>
-    <!-- 顶部控制栏：核算账期与自定义月度预算 -->
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; background: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+
+    <!-- 控制栏：账期 & 月度预算 -->
+    <div class="filter-bar">
         <div style="display: flex; align-items: center; gap: 10px;">
-            <label style="font-size: 14px; font-weight: bold; color: #334155;">📅 核算账期：</label>
-            <select id="month-selector" onchange="onMonthChange()" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; outline: none; background: #f8fafc;">
+            <label>📅 核算账期：</label>
+            <select id="month-selector" onchange="onMonthChange()" style="width: auto; padding: 7px 11px; font-size: 13px; border-radius: 6px; border: 1px solid var(--color-border); outline: none; background: var(--color-bg);">
                 <!-- 动态填充 -->
             </select>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 14px; font-weight: bold; color: #334155;">💰 月度总预算：</label>
+            <label>💰 月度总预算：</label>
             <div style="position: relative; display: flex; align-items: center;">
-                <span style="position: absolute; left: 10px; color: #64748b; font-size: 14px;">¥</span>
+                <span style="position: absolute; left: 10px; color: var(--color-text-tertiary); font-size: 13px;">¥</span>
                 <input type="number" id="custom-budget-input" placeholder="2800" step="100" min="0"
-                    style="width: 110px; padding: 6px 10px 6px 24px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; outline: none;"
+                    style="width: 110px; padding: 7px 10px 7px 24px; font-size: 13px; border: 1px solid var(--color-border); border-radius: 6px; outline: none; background: var(--color-bg);"
                     onkeydown="if(event.key==='Enter') applyBudgetChange();">
             </div>
-            <button type="button" onclick="applyBudgetChange()" 
-                    style="background: #2563eb; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s;">
-                更新预算
-            </button>
+            <button type="button" onclick="applyBudgetChange()" class="btn-primary btn-sm">更新预算</button>
         </div>
     </div>
 
     <!-- 中间：核心可视化双图 -->
     <div class="chart-container">
         <div class="chart-card">
-            <!-- 绝对定位悬浮按钮 -->
+            <div class="chart-card-title">📊 每日支出构成 · 净支出走势</div>
+            <div class="chart-card-subtitle">堆叠柱图 × 净支出折线 × 累计消费进度</div>
+            <!-- 聚焦模式开关 -->
             <div class="chart-floating-control">
                 <input type="checkbox" id="toggle-datazoom">
                 <label for="toggle-datazoom" id="toggle-datazoom-label">聚焦模式</label>
             </div>
-            <!-- 图表容器直接占满整个卡片 -->
             <div id="barLineChart" class="chart-inner"></div>
         </div>
-        <div id="nestedDonutChart" class="chart-card"></div>
+        <div class="chart-card" style="display: flex; flex-direction: column;">
+            <div class="chart-card-title">🍩 分类消费占比</div>
+            <div class="chart-card-subtitle">外环大类 · 内环子类（同色相家族）</div>
+            <div id="nestedDonutChart" style="flex: 1; min-height: 420px;"></div>
+        </div>
     </div>
 
-    <!-- 底部：拿铁因子详细拆解 & 商户复购榜 Top 5 -->
+    <!-- 底部：拿铁因子 & 商户复购榜 -->
     <div class="bottom-section">
         <!-- 拿铁因子明细 -->
         <div class="detail-card" id="latte-factor-card">
@@ -143,80 +162,88 @@
         </div>
     </div>
 
-    <!-- 消费品名全景词云卡片 -->
-    <div class="card" style="background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;">
+    <!-- 消费品名全景词云 -->
+    <div class="card" style="margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-                <h3 style="margin: 0; font-size: 16px; color: #1e293b;">☁️ 当月消费品名词云</h3>
-                <span style="font-size: 12px; color: #94a3b8;">中文分词与权重透视</span>
+                <span style="font-size: 14px; font-weight: 600; color: var(--color-text-primary);">☁️ 当月消费品名词云</span>
+                <span style="font-size: 12px; color: var(--color-text-tertiary);">中文分词与权重透视</span>
             </div>
-
-            <!-- 拨动切换控制区 -->
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: bold;">
-                <span id="label-mode-freq" style="color: #2563eb; transition: color 0.2s;">按频次 (次)</span>
-                
-                <!-- iOS 风格拨动开关 -->
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;">
+                <span id="label-mode-freq" style="color: var(--color-primary); transition: color 0.2s;">按频次 (次)</span>
                 <label class="wc-switch">
                     <input type="checkbox" id="wc-mode-toggle" onchange="switchWordCloudMode(this.checked)">
                     <span class="wc-slider"></span>
                 </label>
-                
-                <span id="label-mode-amount" style="color: #94a3b8; transition: color 0.2s;">按金额 (元)</span>
+                <span id="label-mode-amount" style="color: var(--color-text-tertiary); transition: color 0.2s;">按金额 (元)</span>
             </div>
         </div>
-
-        <!-- 词云渲染画布 -->
         <div id="wordcloud-chart" style="width: 100%; height: 350px;"></div>
     </div>
 
-    <!-- 新增：独立 AI 智能分析与问答控制台 -->
-    <div class="detail-card" style="margin-top: 20px;">
+    <!-- AI 智能财务顾问 -->
+    <div class="detail-card" style="margin-bottom: 20px;">
         <div class="card-header">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <h3>🤖 AI 智能财务顾问 (DeepSeek-Flash)</h3>
                 <span class="sub-label">支持全月流水逐笔深度行为学精读与即时问答</span>
             </div>
             <div style="display: flex; gap: 8px;">
-                <button id="btn-quick-diagnose" onclick="runAiDiagnose()" style="background: #2563eb; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">
+                <button id="btn-quick-diagnose" onclick="runAiDiagnose()" class="btn-primary btn-sm">
                     ⚡ 核心指标体检
                 </button>
-                <button id="btn-deep-read" onclick="runDeepRead()" style="background: #ea580c; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">
+                <button id="btn-deep-read" onclick="runDeepRead()" class="btn-ghost btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">
                     📖 全月流水深度精读
                 </button>
-                <button id="btn-export-ai" onclick="exportAiAdvice()" style="background: #059669; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">
-                📥 导出报告
+                <button id="btn-export-ai" onclick="exportAiAdvice()" class="btn-ghost btn-sm">
+                    📥 导出报告
                 </button>
             </div>
         </div>
 
-        <!-- 问答输入框与快捷提示 -->
+        <!-- 问答输入框 -->
         <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-            <input type="text" id="ai-query-input" placeholder="输入你想了解的账单问题（如：不算房租我在吃上面花了多少比例？/ 哪天花钱最多？）..." 
-                   style="flex: 1; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none;"
+            <input type="text" id="ai-query-input" placeholder="输入你想了解的账单问题（如：不算房租我在吃上面花了多少比例？/ 哪天花钱最多？）..."
+                   style="flex: 1; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; outline: none;"
                    onkeydown="if(event.key === 'Enter') submitAiQuery();">
-            <button id="btn-submit-query" onclick="submitAiQuery()" style="background: #0f172a; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                提 问
-            </button>
+            <button id="btn-submit-query" onclick="submitAiQuery()" class="btn-primary">提 问</button>
         </div>
 
-        <!-- 快捷问答示例标签 -->
+        <!-- 快捷问答标签 -->
         <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
-            <span style="font-size: 12px; color: #64748b; line-height: 24px;">快捷提问：</span>
+            <span style="font-size: 12px; color: var(--color-text-tertiary); line-height: 24px;">快捷提问：</span>
             <button class="quick-tag" onclick="quickFill('不算房租，我在吃（饮食和饮食*）上面一共花了多少钱？')">🍜 吃上面花了多少？</button>
             <button class="quick-tag" onclick="quickFill('我这个月哪一天花钱最多？分别买了什么？')">📅 哪天花销最高？</button>
             <button class="quick-tag" onclick="quickFill('帮我查一下在优特卖的所有消费频次、总金额与具体商品。')">🛒 优特卖消费明细</button>
             <button class="quick-tag" onclick="quickFill('我当前月度总预算设定为 {budget} 元，请根据我目前的花钱节奏，分析一下月底总预算会超支吗？')">⚠️ 月底超支风险评估</button>
         </div>
 
-        <!-- AI 回答展示区域 -->
-        <div id="ai-response-box" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; min-height: 80px; font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">
-            <span style="color: #94a3b8;">点击上方“生成本月财务体检报告”或直接输入问题，AI 的深度分析将呈现在这里...</span>
+        <!-- AI 回答展示区 -->
+        <div id="ai-response-box">
+            <span style="color: var(--color-text-tertiary);">点击上方"核心指标体检"或直接输入问题，AI 的深度分析将呈现在这里...</span>
         </div>
     </div>
 
     <!-- 业务逻辑脚本 -->
     <script src="auth.js"></script>
     <script src="dashboard.js"></script>
-
+    <script>
+        // 初始化导航状态（管理员才显示日志入口）
+        (async () => {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (res.ok) {
+                    const me = await res.json();
+                    if (me.role === 'admin') {
+                        document.getElementById('nav-logs').style.display = 'inline-block';
+                    }
+                }
+            } catch (e) {}
+        })();
+        function logout() {
+            fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+                .finally(() => window.location.replace('/login.html'));
+        }
+    </script>
 </body>
 </html>

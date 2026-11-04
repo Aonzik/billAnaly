@@ -31,6 +31,8 @@ JSON_OUTPUT = os.path.join(STATIC_DIR, "expense_data.json")
 PUBLIC_PATHS = {
     "/login.html",
     "/favicon.ico",
+    "/tokens.css",
+    "/style.css",
     "/api/auth/login",
 }
 

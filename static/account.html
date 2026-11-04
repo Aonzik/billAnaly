@@ -3,93 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>账号管理 · 智能个人财务分析系统</title>
+    <title>账号管理 · BillAnaly</title>
     <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="tokens.css">
+    <link rel="stylesheet" href="style.css">
     <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; padding: 22px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: #f1f5f9; color: #334155;
-        }
         .container { max-width: 860px; margin: 0 auto; }
-        .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
-        }
-        .topbar h1 { font-size: 19px; margin: 0; color: #0f172a; }
-        .topbar .links { display: flex; gap: 10px; flex-wrap: wrap; }
-        .topbar a, .topbar button {
-            font-size: 13px; text-decoration: none; padding: 7px 13px;
-            border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;
-            color: #334155; cursor: pointer; font-weight: 600;
-        }
-        .topbar a:hover, .topbar button:hover { background: #f8fafc; border-color: #94a3b8; }
-        .topbar .btn-logout { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-        .topbar .btn-logout:hover { background: #fee2e2; }
-
-        .card {
-            background: #fff; border-radius: 10px; padding: 20px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); margin-bottom: 16px;
-        }
-        .card h2 {
-            font-size: 15px; margin: 0 0 4px; color: #0f172a;
-            display: flex; align-items: center; gap: 8px;
-        }
-        .card .desc { font-size: 12.5px; color: #94a3b8; margin: 0 0 16px; }
         .role-badge {
-            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-            background: #dbeafe; color: #1d4ed8;
+            font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;
+            background: var(--color-primary-bg); color: var(--color-primary);
+            border: 1px solid rgba(99,91,255,0.2);
         }
-        .role-badge.user { background: #e2e8f0; color: #475569; }
-
+        .role-badge.user { background: #E2E8F0; color: #475569; border-color: #CBD5E1; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
         .form-group { display: flex; flex-direction: column; }
-        .form-group label { font-size: 12px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
-        .form-group input {
-            padding: 9px 11px; font-size: 13.5px; border: 1px solid #cbd5e1;
-            border-radius: 6px; outline: none;
-        }
-        .form-group input:focus {
-            border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
+        .form-group label { font-size: 11px; color: #64748b; margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .form-group input { padding: 9px 11px; font-size: 13.5px; }
         .actions { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        button.primary {
-            background: #2563eb; color: #fff; border: none; padding: 9px 18px;
-            border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer;
-        }
-        button.primary:hover { background: #1d4ed8; }
-        button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
-
-        .msg { display: none; font-size: 13px; padding: 9px 12px; border-radius: 6px; margin-top: 12px; }
-        .msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-        .msg.ok { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-
+        .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: #0F172A; display: flex; align-items: center; gap: 8px; }
+        .card .desc { font-size: 12.5px; color: #94A3B8; margin: 0 0 16px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap; }
-        th { background: #f8fafc; color: #64748b; font-weight: 600; }
-        tr:hover td { background: #f8fafc; }
+        th, td { padding: 9px 10px; border-bottom: 1px solid #E2E8F0; text-align: left; white-space: nowrap; }
+        th { background: #F8FAFC; color: #64748B; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+        tr:hover td { background: #F8FAFC; }
+        tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--color-primary); }
         .btn-del {
-            background: #fee2e2; color: #b91c1c; border: none; padding: 4px 10px;
-            border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600;
+            background: var(--color-danger-bg); color: var(--color-danger);
+            border: 1px solid var(--color-danger-border); padding: 4px 10px;
+            border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600; font-family: inherit;
         }
-        .btn-del:hover { background: #fecaca; }
-        .btn-del:disabled { background: #f1f5f9; color: #cbd5e1; cursor: not-allowed; }
-        .muted { color: #94a3b8; font-size: 12px; }
+        .btn-del:hover { background: #FEE2E2; }
+        .btn-del:disabled { background: #F1F5F9; color: #CBD5E1; cursor: not-allowed; border-color: #E2E8F0; }
+        .muted { color: #94A3B8; font-size: 12px; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="topbar">
-        <h1>👤 账号管理</h1>
-        <div class="links">
-            <a href="/dashboard.html">📊 图表看板</a>
-            <a href="/manager.html">📝 记账管理</a>
-            <a href="/logs.html" id="logs-link" style="display:none;">📜 操作日志</a>
-            <button class="btn-logout" onclick="logout()">退出登录</button>
+    <!-- 统一顶部导航 -->
+    <nav class="topbar">
+        <a href="/dashboard.html" class="topbar-brand">💎 BillAnaly</a>
+        <div class="topbar-nav">
+            <a href="/dashboard.html">仪表盘</a>
+            <a href="/manager.html">记账管理</a>
+            <a href="/account.html" class="active">账号</a>
+            <a href="/logs.html" id="logs-link" style="display:none;">日志</a>
         </div>
-    </div>
+        <div class="topbar-actions">
+            <button class="btn-danger btn-sm" onclick="logout()">退出登录</button>
+        </div>
+    </nav>
 
+<div class="container">
     <!-- 当前账号信息 -->
     <div class="card">
         <h2>当前账号 <span class="role-badge" id="role-badge">-</span></h2>
@@ -114,7 +77,7 @@
             </div>
         </div>
         <div class="actions">
-            <button class="primary" id="btn-username" onclick="changeUsername()">保存账号名</button>
+            <button class="btn-primary" id="btn-username" onclick="changeUsername()">保存账号名</button>
         </div>
         <div class="msg" id="msg-username"></div>
     </div>
@@ -138,14 +101,14 @@
             </div>
         </div>
         <div class="actions">
-            <button class="primary" id="btn-password" onclick="changePassword()">保存密码</button>
+            <button class="btn-primary" id="btn-password" onclick="changePassword()">保存密码</button>
         </div>
         <div class="msg" id="msg-password"></div>
     </div>
 
     <!-- 管理员：账号管理 -->
     <div class="card" id="admin-card" style="display:none;">
-        <h2>🛡️ 账号管理（仅管理员）</h2>
+        <h2>🛡️ 账号管理<span style="font-size:11px; font-weight:400; color:#94A3B8; margin-left:8px;">仅管理员可见</span></h2>
         <p class="desc">创建新账号后，把账号密码告知使用者，对方即可登录系统。</p>
         <div class="grid">
             <div class="form-group">
@@ -158,7 +121,7 @@
             </div>
         </div>
         <div class="actions">
-            <button class="primary" id="btn-create" onclick="createUser()">➕ 创建账号</button>
+            <button class="btn-primary" id="btn-create" onclick="createUser()">➕ 创建账号</button>
         </div>
         <div class="msg" id="msg-create"></div>
 
@@ -206,9 +169,7 @@
     }
 
     async function logout() {
-        try {
-            await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-        } catch (e) { /* 忽略 */ }
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch (e) {}
         window.location.replace('/login.html');
     }
 
@@ -236,10 +197,7 @@
 
     async function loadUsers() {
         const res = await fetch('/api/auth/users', { credentials: 'same-origin' });
-        if (res.status === 403) {
-            document.getElementById('admin-card').style.display = 'none';
-            return;
-        }
+        if (res.status === 403) { document.getElementById('admin-card').style.display = 'none'; return; }
         if (handleUnauthorized(res)) return;
         if (!res.ok) return;
 
@@ -272,11 +230,7 @@
         clearMsg('msg-create');
         const username = document.getElementById('create-username').value.trim();
         const password = document.getElementById('create-password').value;
-
-        if (!username || !password) {
-            showMsg('msg-create', '请填写新账号名与初始密码');
-            return;
-        }
+        if (!username || !password) { showMsg('msg-create', '请填写新账号名与初始密码'); return; }
 
         const btn = document.getElementById('btn-create');
         btn.disabled = true;
@@ -308,10 +262,7 @@
         if (!confirm(`确定删除账号「${username}」吗？该账号将立即无法登录。`)) return;
         clearMsg('msg-create');
         try {
-            const res = await fetch(`/api/auth/users/${id}`, {
-                method: 'DELETE',
-                credentials: 'same-origin'
-            });
+            const res = await fetch(`/api/auth/users/${id}`, { method: 'DELETE', credentials: 'same-origin' });
             if (handleUnauthorized(res)) return;
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
@@ -329,7 +280,6 @@
         clearMsg('msg-username');
         const newUsername = document.getElementById('new-username').value.trim();
         const currentPassword = document.getElementById('username-password').value;
-
         if (!newUsername) { showMsg('msg-username', '请输入新账号名'); return; }
         if (!currentPassword) { showMsg('msg-username', '请输入当前密码以确认身份'); return; }
 
@@ -365,7 +315,6 @@
         const currentPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
         const confirmPassword = document.getElementById('confirm-password').value;
-
         if (!currentPassword) { showMsg('msg-password', '请输入当前密码'); return; }
         if (!newPassword) { showMsg('msg-password', '请输入新密码'); return; }
         if (newPassword !== confirmPassword) { showMsg('msg-password', '两次输入的新密码不一致'); return; }
@@ -377,11 +326,7 @@
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    current_password: currentPassword,
-                    new_password: newPassword,
-                    confirm_password: confirmPassword
-                })
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword })
             });
             if (handleUnauthorized(res)) return;
             const data = await res.json().catch(() => ({}));

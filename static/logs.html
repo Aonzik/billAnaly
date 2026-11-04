@@ -3,99 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>操作日志 · 智能个人财务分析系统</title>
+    <title>操作日志 · BillAnaly</title>
     <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="tokens.css">
+    <link rel="stylesheet" href="style.css">
     <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; padding: 22px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: #f1f5f9; color: #334155;
-        }
         .container { max-width: 1180px; margin: 0 auto; }
-        .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
-        }
-        .topbar h1 { font-size: 19px; margin: 0; color: #0f172a; }
-        .topbar .links { display: flex; gap: 10px; flex-wrap: wrap; }
-        .topbar a, .topbar button {
-            font-size: 13px; text-decoration: none; padding: 7px 13px;
-            border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;
-            color: #334155; cursor: pointer; font-weight: 600;
-        }
-        .topbar a:hover, .topbar button:hover { background: #f8fafc; border-color: #94a3b8; }
-        .topbar .btn-logout { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-
-        .card {
-            background: #fff; border-radius: 10px; padding: 20px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); margin-bottom: 16px;
-        }
-        .card h2 { font-size: 15px; margin: 0 0 4px; color: #0f172a; }
-        .card .desc { font-size: 12.5px; color: #94a3b8; margin: 0 0 16px; }
-
-        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .field { display: flex; flex-direction: column; }
-        .field label { font-size: 12px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
-        .field select, .field input {
-            padding: 8px 11px; font-size: 13px; border: 1px solid #cbd5e1;
-            border-radius: 6px; outline: none; background: #fff; min-width: 150px;
-        }
-        .field select:focus, .field input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
-        button.primary {
-            background: #2563eb; color: #fff; border: none; padding: 9px 18px;
-            border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer;
-        }
-        button.primary:hover { background: #1d4ed8; }
-        button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
-        button.ghost {
-            background: #fff; color: #334155; border: 1px solid #cbd5e1;
-            padding: 9px 16px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer;
-        }
-        button.ghost:hover { background: #f8fafc; }
-
-        .stat { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: #64748b; margin-bottom: 12px; }
-        .stat b { color: #0f172a; }
-
         .logbox {
-            background: #0f172a; color: #cbd5e1; border-radius: 8px; padding: 14px;
-            font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 12px;
-            line-height: 1.65; max-height: 62vh; overflow: auto; white-space: pre-wrap;
+            background: #0F172A;
+            color: #CBD5E1;
+            border-radius: 10px;
+            padding: 16px;
+            font-family: Consolas, "Cascadia Mono", Menlo, monospace;
+            font-size: 12.5px;
+            line-height: 1.7;
+            max-height: 62vh;
+            overflow: auto;
+            white-space: pre-wrap;
             word-break: break-all;
         }
-        .logbox .ts { color: #7dd3fc; }
-        .logbox .op { color: #fca5a5; font-weight: 700; }
-        .logbox .act { color: #e2e8f0; }
-        .logbox .meta { color: #64748b; }
-        .logbox .row { padding: 3px 0; border-bottom: 1px dashed rgba(148,163,184,.15); }
-
-        .msg { display: none; font-size: 13px; padding: 9px 12px; border-radius: 6px; margin-top: 12px; }
-        .msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-        .msg.ok { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .logbox .ts  { color: #7DD3FC; }
+        .logbox .op  { color: #FCA5A5; font-weight: 700; }
+        .logbox .act { color: #E2E8F0; }
+        .logbox .meta { color: #64748B; }
+        .logbox .row { padding: 3px 0; border-bottom: 1px dashed rgba(148,163,184,0.12); }
+        .stat { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: #64748b; margin-bottom: 12px; }
+        .stat b { color: #0f172a; }
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; }
+        .field label { font-size: 12px; color: #64748b; margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .field select, .field input { padding: 8px 11px; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 6px; outline: none; background: #fff; min-width: 150px; font-family: inherit; }
+        .field select:focus, .field input:focus { border-color: #635BFF; box-shadow: 0 0 0 3px rgba(99,91,255,0.12); }
+        .badge-active { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #ECFDF5; color: #15803D; border: 1px solid #A7F3D0; margin-left: 6px; }
+        .badge-arch   { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #E2E8F0; color: #475569; border: 1px solid #CBD5E1; margin-left: 6px; }
         .muted { color: #94a3b8; font-size: 12px; }
-
-        .badge {
-            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-            background: #dcfce7; color: #15803d; margin-left: 6px;
-        }
-        .badge.arch { background: #e2e8f0; color: #475569; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="topbar">
-        <h1>📜 操作日志</h1>
-        <div class="links">
-            <a href="/dashboard.html">📊 图表看板</a>
-            <a href="/manager.html">📝 记账管理</a>
-            <a href="/account.html">👤 账号管理</a>
-            <button class="btn-logout" onclick="logout()">退出登录</button>
+    <!-- 统一顶部导航 -->
+    <nav class="topbar">
+        <a href="/dashboard.html" class="topbar-brand">💎 BillAnaly</a>
+        <div class="topbar-nav">
+            <a href="/dashboard.html">仪表盘</a>
+            <a href="/manager.html">记账管理</a>
+            <a href="/account.html">账号</a>
+            <a href="/logs.html" class="active">日志</a>
         </div>
-    </div>
+        <div class="topbar-actions">
+            <button class="btn-danger btn-sm" onclick="logout()">退出登录</button>
+        </div>
+    </nav>
 
+<div class="container">
     <div class="card">
-        <h2>日志文件与筛选</h2>
-        <p class="desc" id="log-dir">日志目录：加载中...</p>
+        <h2 style="font-size: 15px; font-weight: 600; color: #0F172A; margin: 0 0 4px;">日志文件与筛选</h2>
+        <p class="muted" id="log-dir" style="margin: 0 0 16px;">日志目录：加载中...</p>
         <div class="toolbar">
             <div class="field">
                 <label>日志文件</label>
@@ -115,8 +77,8 @@
                 <label>关键字过滤</label>
                 <input type="text" id="keyword" placeholder="如 admin / 删除 / 密码" style="min-width:220px;">
             </div>
-            <button class="primary" id="btn-load" onclick="loadLog()">🔄 刷新日志</button>
-            <button class="ghost" onclick="downloadLog()">⬇️ 下载该文件</button>
+            <button class="btn-primary" id="btn-load" onclick="loadLog()">🔄 刷新日志</button>
+            <button class="btn-ghost" onclick="downloadLog()">⬇️ 下载该文件</button>
         </div>
         <div class="msg" id="msg"></div>
     </div>
