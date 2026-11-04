@@ -8,66 +8,353 @@
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        .container { max-width: 1380px; margin: 0 auto; }
-        .card h2 { margin: 0; font-size: 14px; font-weight: 600; color: #0F172A; }
+        .container { max-width: 1400px; margin: 0 auto; }
 
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; align-items: end; }
-        .form-group { display: flex; flex-direction: column; }
-        .form-group label { font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-        .form-group input, .form-group select {
-            padding: 7px 9px; border: 1px solid #E2E8F0; border-radius: 6px;
-            font-size: 13px; outline: none; font-family: inherit;
-            transition: border-color 0.15s, box-shadow 0.15s;
+        /* 卡片头部与布局 */
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--color-border-soft);
         }
-        .form-group input:focus, .form-group select:focus {
-            border-color: #635BFF;
-            box-shadow: 0 0 0 3px rgba(99,91,255,0.12);
+        .card-header-flex h2 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .btn-add    { background: #635BFF; color: #fff; border: none; padding: 8px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; height: 35px; font-family: inherit; }
-        .btn-add:hover { background: #4F46E5; }
-        .btn-filter { background: #0F172A; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; cursor: pointer; height: 35px; font-family: inherit; }
-        .btn-filter:hover { background: #1E293B; }
-        .btn-reset  { background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0; padding: 7px 12px; border-radius: 6px; cursor: pointer; height: 35px; font-family: inherit; }
-        .btn-reset:hover { background: #E2E8F0; }
-        .btn-export { background: #10B981; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; height: 35px; font-family: inherit; }
-        .btn-export:hover { background: #059669; }
+        /* 录入表单分组区域 */
+        .entry-sections {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr 1.3fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 1100px) {
+            .entry-sections { grid-template-columns: 1fr; gap: 12px; }
+        }
+        .entry-group {
+            background: var(--color-bg);
+            border: 1px solid var(--color-border-soft);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .group-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--color-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .field-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .form-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .form-item label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            margin-bottom: 5px;
+        }
+        .input-money-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .input-money-wrap span {
+            position: absolute;
+            left: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--color-text-tertiary);
+            pointer-events: none;
+        }
+        .input-money-wrap input {
+            padding-left: 24px !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            color: var(--color-danger) !important;
+        }
 
-        .table-responsive { overflow-x: auto; max-height: 600px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-        th, td { padding: 8px 10px; border-bottom: 1px solid #E2E8F0; white-space: nowrap; }
-        th { background: #F8FAFC; color: #64748B; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; position: sticky; top: 0; z-index: 10; }
-        tr:hover td { background-color: #F8FAFC; }
-        tr:hover td:first-child { box-shadow: inset 2px 0 0 #635BFF; }
+        /* 快速录入底部提交栏 */
+        .entry-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 10px;
+            border-top: 1px dashed var(--color-border);
+        }
 
-        .sortable-th { cursor: pointer; user-select: none; }
-        .sortable-th:hover { color: #635BFF; background-color: #EEF2FF; }
+        /* 快捷时间周期胶囊 (Pills) */
+        .quick-period-pills {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .pill-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-text-tertiary);
+            margin-right: 4px;
+        }
+        .pill-btn {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 12px;
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+        .pill-btn:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            background: var(--color-primary-bg);
+        }
+        .pill-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(99,91,255,0.25);
+        }
 
-        .editable-cell { cursor: pointer; border-radius: 4px; padding: 3px 5px; transition: background 0.15s; }
-        .editable-cell:hover { background-color: #EEF2FF; outline: 1px dashed #635BFF; }
-        .cell-input { width: 100%; padding: 4px; font-size: 12px; border: 1px solid #635BFF; border-radius: 4px; font-family: inherit; }
+        /* 筛选网格排版 */
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            align-items: flex-end;
+            margin-bottom: 12px;
+        }
 
-        .btn-action { border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px; font-family: inherit; }
-        .btn-del { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
-        .btn-del:hover { background: #FEE2E2; }
+        /* 实时动态小计统计条 (Summary KPI Bar) */
+        .summary-kpi-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .summary-kpi-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            box-shadow: var(--shadow-xs);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        }
+        .summary-kpi-card:hover {
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+        .summary-kpi-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: var(--color-border);
+        }
+        .summary-kpi-card.kpi-count::before   { background: var(--color-primary); }
+        .summary-kpi-card.kpi-expense::before { background: var(--color-danger); }
+        .summary-kpi-card.kpi-income::before  { background: var(--color-success); }
+        .summary-kpi-card.kpi-net::before     { background: var(--color-info); }
+        
+        .kpi-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }
+        .kpi-num {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.3px;
+        }
 
-        .badge-type { display: inline-block; padding: 2px 7px; border-radius: 9999px; font-size: 11px; font-weight: 700; }
-        .type-EX { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
-        .type-IN { background: #ECFDF5; color: #166534; border: 1px solid #A7F3D0; }
-        .type-AP { background: #EFF6FF; color: #075985; border: 1px solid #BFDBFE; }
-        .type-AR { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
-        .type-TR { background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; }
+        /* 数据明细表格 */
+        .table-responsive {
+            overflow-x: auto;
+            max-height: 65vh;
+            border: 1px solid var(--color-border-soft);
+            border-radius: var(--radius-sm);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+            background: #ffffff;
+        }
+        th, td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--color-border-soft);
+            white-space: nowrap;
+        }
+        th {
+            background: var(--color-bg);
+            color: var(--color-text-tertiary);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 1px 0 var(--color-border);
+        }
+        tr:hover td {
+            background-color: var(--color-bg);
+        }
+        tr:hover td:first-child {
+            box-shadow: inset 3px 0 0 var(--color-primary);
+        }
 
-        /* 语音按钮 */
+        .sortable-th {
+            cursor: pointer;
+            user-select: none;
+            transition: color var(--transition-fast), background var(--transition-fast);
+        }
+        .sortable-th:hover {
+            color: var(--color-primary);
+            background-color: var(--color-primary-bg);
+        }
+
+        /* 等宽金额数字 */
+        .amount-cell {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+        .amount-expense { color: var(--color-danger); }
+        .amount-income  { color: var(--color-success); }
+        .amount-neutral { color: var(--color-text-primary); }
+
+        /* 单元格内联可编辑 */
+        .editable-cell {
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            padding: 4px 6px;
+            transition: all var(--transition-fast);
+        }
+        .editable-cell:hover {
+            background-color: var(--color-primary-bg);
+            outline: 1px dashed var(--color-primary-light);
+        }
+        .cell-input {
+            width: 100%;
+            padding: 5px 8px;
+            font-size: 12.5px;
+            border: 1px solid var(--color-primary);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            background: #ffffff;
+            box-shadow: 0 0 0 2px rgba(99,91,255,0.15);
+            outline: none;
+        }
+
+        /* Stripe 胶囊徽章 (Type Pills) */
+        .badge-type {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .type-EX { background: var(--color-danger-bg);  color: var(--color-danger);  border: 1px solid var(--color-danger-border); }
+        .type-IN { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
+        .type-AP { background: var(--color-info-bg);    color: var(--color-info);    border: 1px solid var(--color-info-border); }
+        .type-AR { background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid var(--color-warning-border); }
+        .type-TR { background: var(--color-primary-bg); color: var(--color-primary); border: 1px solid rgba(99,91,255,0.25); }
+
+        /* 操作列按钮 */
+        .btn-action-del {
+            background: transparent;
+            color: var(--color-danger);
+            border: 1px solid transparent;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+        .btn-action-del:hover {
+            background: var(--color-danger-bg);
+            border-color: var(--color-danger-border);
+        }
+
+        /* 智能记账前置按钮 */
+        .btn-ai-assistant {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, #635BFF, #818CF8);
+            color: #ffffff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(99,91,255,0.25);
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+            font-family: inherit;
+        }
+        .btn-ai-assistant:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99,91,255,0.35);
+        }
+
+        /* 移动端浮动语音按钮 */
         .fab-voice {
-            position: fixed; bottom: 24px; right: 24px;
-            width: 52px; height: 52px;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            background: #635BFF;
+            background: var(--color-primary);
             color: #fff;
             border: none;
             box-shadow: 0 4px 14px rgba(99,91,255,0.4);
-            font-size: 22px;
+            font-size: 20px;
             cursor: pointer;
             z-index: 999;
             transition: transform 0.15s, box-shadow 0.15s;
@@ -94,95 +381,161 @@
     </nav>
 
 <div class="container">
-    <!-- 1. 新增记账条目 -->
+
+    <!-- 1. 快速录入工作台 (Card 1) -->
     <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
-            <h2>➕ 录入账单条目</h2>
+        <div class="card-header-flex">
+            <h2>➕ 录入账单流水</h2>
+            <button type="button" class="btn-ai-assistant" onclick="triggerVoiceAssistant()">
+                🎤 AI 智能识别填单
+            </button>
         </div>
+
         <form id="expense-form">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>日期</label>
-                    <input type="date" id="date" required>
+            <div class="entry-sections">
+                <!-- Group 1: 时态与类型 -->
+                <div class="entry-group">
+                    <span class="group-title">📅 发生时态与类型</span>
+                    <div class="field-row">
+                        <div class="form-item">
+                            <label for="date">记账日期</label>
+                            <input type="date" id="date" required>
+                        </div>
+                        <div class="form-item" style="max-width: 90px;">
+                            <label for="time">时间</label>
+                            <input type="text" id="time" placeholder="12:00">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label for="type">交易类型</label>
+                        <select id="type">
+                            <option value="EX" selected>支出（EX）</option>
+                            <option value="IN">收入（IN）</option>
+                            <option value="AP">收回（AP）</option>
+                            <option value="AR">垫付（AR）</option>
+                            <option value="TR">转移（TR）</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group" style="max-width: 90px;">
-                    <label>时间</label>
-                    <input type="text" id="time" placeholder="如 12:30">
+
+                <!-- Group 2: 账目核心 -->
+                <div class="entry-group">
+                    <span class="group-title">🏷️ 消费明细与金额</span>
+                    <div class="field-row">
+                        <div class="form-item">
+                            <label for="category">消费分类</label>
+                            <input type="text" id="category" placeholder="如 饮食 / 交通 / 居住" required list="category-datalist">
+                            <datalist id="category-datalist">
+                                <option value="饮食"></option>
+                                <option value="饮食*"></option>
+                                <option value="交通"></option>
+                                <option value="日用"></option>
+                                <option value="居住"></option>
+                                <option value="花呗"></option>
+                                <option value="娱乐"></option>
+                                <option value="数字"></option>
+                                <option value="周边"></option>
+                                <option value="医疗"></option>
+                            </datalist>
+                        </div>
+                        <div class="form-item">
+                            <label for="name">品名 / 项目</label>
+                            <input type="text" id="name" placeholder="如 鲜肉饭团 + 冰美式" required>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label for="amount">实际金额 (元)</label>
+                        <div class="input-money-wrap">
+                            <span>¥</span>
+                            <input type="number" step="0.01" id="amount" placeholder="0.00" required>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>交易类型</label>
-                    <select id="type">
-                        <option value="EX" selected>支出（EX）</option>
-                        <option value="IN">收入（IN）</option>
-                        <option value="AP">收回（AP）</option>
-                        <option value="AR">垫付（AR）</option>
-                        <option value="TR">转移（TR）</option>
-                    </select>
+
+                <!-- Group 3: 溯源与说明 -->
+                <div class="entry-group">
+                    <span class="group-title">💳 支付溯源与备注</span>
+                    <div class="field-row">
+                        <div class="form-item">
+                            <label for="pay_acc">源账户</label>
+                            <input list="account-options" id="pay_acc" placeholder="支付来源" value="微信（VX）">
+                            <datalist id="account-options">
+                                <option value="支付宝（AL）"></option>
+                                <option value="微信（VX）"></option>
+                                <option value="银行卡（BK）"></option>
+                                <option value="交通卡（TC）"></option>
+                                <option value="花呗（HB）"></option>
+                            </datalist>
+                        </div>
+                        <div class="form-item">
+                            <label for="merchant">目标账户 / 商户</label>
+                            <input type="text" id="merchant" placeholder="如 全家便利店 / 房东">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label for="remark">备注说明</label>
+                        <input type="text" id="remark" placeholder="优惠代金券、分摊明细等">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>分类</label>
-                    <input type="text" id="category" placeholder="如 饮食 / 交通" required>
-                </div>
-                <div class="form-group">
-                    <label>品名</label>
-                    <input type="text" id="name" placeholder="如 农夫山泉.5L" required>
-                </div>
-                <div class="form-group" style="max-width: 100px;">
-                    <label>金额 (元)</label>
-                    <input type="number" step="0.01" id="amount" placeholder="0.00" required>
-                </div>
-                <div class="form-group">
-                    <label>源账户</label>
-                    <input list="account-options" id="pay_acc" placeholder="选择或手打输入" value="微信（VX）">
-                    <datalist id="account-options">
-                        <option value="支付宝（AL）"></option>
-                        <option value="微信（VX）"></option>
-                        <option value="银行卡（BK）"></option>
-                        <option value="交通卡（TC）"></option>
-                        <option value="花呗（HB）"></option>
-                    </datalist>
-                </div>
-                <div class="form-group">
-                    <label>目标账户</label>
-                    <input type="text" id="merchant" placeholder="如 优特卖 / 商家名">
-                </div>
-                <div class="form-group">
-                    <label>备注</label>
-                    <input type="text" id="remark" placeholder="补充说明或代金券备注">
-                </div>
-                <button type="submit" class="btn-add">提交记录</button>
+            </div>
+
+            <!-- 操作行 -->
+            <div class="entry-actions">
+                <span style="font-size: 12px; color: var(--color-text-tertiary);">💡 提交后将自动实时重新聚合核算月度缓存</span>
+                <button type="submit" class="btn-primary" style="padding: 9px 24px;">
+                    ➕ 提交入账
+                </button>
             </div>
         </form>
     </div>
 
-    <!-- 2. 多维筛选与排序工具栏 -->
-    <div class="card" style="padding: 14px 18px;">
-        <div class="form-grid" style="margin-bottom: 10px;">
-            <div class="form-group">
-                <label>开始日期</label>
+    <!-- 2. 多维筛选与检索工具栏 (Card 2) -->
+    <div class="card">
+        <div class="card-header-flex" style="margin-bottom: 12px;">
+            <h2>🔍 多维流水检索与过滤</h2>
+            <button type="button" class="btn-export" onclick="exportToExcel()" style="padding: 6px 14px; font-size: 12.5px;">
+                📥 导出当前数据 Excel
+            </button>
+        </div>
+
+        <!-- 快捷时间胶囊 (Quick Period Pills) -->
+        <div class="quick-period-pills">
+            <span class="pill-label">快捷时间：</span>
+            <button type="button" class="pill-btn active" id="pill-all" onclick="setQuickPeriod('all')">全部流水</button>
+            <button type="button" class="pill-btn" id="pill-this-month" onclick="setQuickPeriod('this_month')">本月账期</button>
+            <button type="button" class="pill-btn" id="pill-last-month" onclick="setQuickPeriod('last_month')">上月账期</button>
+            <button type="button" class="pill-btn" id="pill-7d" onclick="setQuickPeriod('7d')">近 7 天</button>
+            <button type="button" class="pill-btn" id="pill-30d" onclick="setQuickPeriod('30d')">近 30 天</button>
+            <button type="button" class="pill-btn" id="pill-year" onclick="setQuickPeriod('this_year')">今年累计</button>
+        </div>
+
+        <!-- 详细筛选控件 -->
+        <div class="filter-grid">
+            <div class="form-item">
+                <label for="filter-start">开始日期</label>
                 <input type="date" id="filter-start">
             </div>
-            <div class="form-group">
-                <label>结束日期</label>
+            <div class="form-item">
+                <label for="filter-end">结束日期</label>
                 <input type="date" id="filter-end">
             </div>
-            <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <label style="margin-bottom: 0;">消费分类</label>
-                    <label style="font-size: 11px; color: #635BFF; cursor: pointer; display: flex; align-items: center; gap: 3px; text-transform: none; letter-spacing: 0;">
-                        <input type="checkbox" id="filter-exact" onchange="loadData()"> 精确
+            <div class="form-item">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label for="filter-category" style="margin-bottom:0;">消费分类</label>
+                    <label style="font-size: 11px; color: var(--color-primary); cursor: pointer; display: flex; align-items: center; gap: 3px; font-weight: 600;">
+                        <input type="checkbox" id="filter-exact" onchange="loadData()"> 精确匹配
                     </label>
                 </div>
-                <input type="text" id="filter-category" placeholder="按分类搜索...">
+                <input type="text" id="filter-category" placeholder="按分类过滤...">
             </div>
-            <div class="form-group">
-                <label>品名搜索</label>
+            <div class="form-item">
+                <label for="filter-name">品名 / 项目搜索</label>
                 <input type="text" id="filter-name" placeholder="包含关键字...">
             </div>
-            <div class="form-group">
-                <label>交易类型</label>
+            <div class="form-item">
+                <label for="filter-type">交易类型</label>
                 <select id="filter-type">
-                    <option value="">全部类型</option>
+                    <option value="">全部交易类型</option>
                     <option value="EX">支出（EX）</option>
                     <option value="IN">收入（IN）</option>
                     <option value="AP">收回（AP）</option>
@@ -191,11 +544,12 @@
                 </select>
             </div>
         </div>
-        <div class="form-grid">
-            <div class="form-group">
-                <label>源账户</label>
+
+        <div class="filter-grid" style="margin-bottom: 0;">
+            <div class="form-item">
+                <label for="filter-account">源账户</label>
                 <select id="filter-account">
-                    <option value="">全部源账户</option>
+                    <option value="">全部账户</option>
                     <option value="AL">支付宝（AL）</option>
                     <option value="VX">微信（VX）</option>
                     <option value="BK">银行卡（BK）</option>
@@ -203,76 +557,108 @@
                     <option value="HB">花呗（HB）</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label>目标账户/商户</label>
-                <input type="text" id="filter-merchant" placeholder="如 优特卖 / 麦当劳">
+            <div class="form-item">
+                <label for="filter-merchant">目标账户 / 商户</label>
+                <input type="text" id="filter-merchant" placeholder="如 优特卖 / 房东">
             </div>
-            <div class="form-group">
-                <label>金额范围 (最小~最大)</label>
-                <div style="display: flex; gap: 4px; align-items: center;">
-                    <input type="number" step="0.01" id="filter-min-amount" placeholder="¥ 最小" style="width: 50%;">
-                    <span style="color:#94a3b8;">-</span>
-                    <input type="number" step="0.01" id="filter-max-amount" placeholder="¥ 最大" style="width: 50%;">
+            <div class="form-item">
+                <label>金额范围 (最小 ~ 最大)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="number" step="0.01" id="filter-min-amount" placeholder="¥ Min" style="width: 50%;">
+                    <span style="color: var(--color-text-tertiary);">-</span>
+                    <input type="number" step="0.01" id="filter-max-amount" placeholder="¥ Max" style="width: 50%;">
                 </div>
             </div>
-            <div class="form-group" style="max-width: 140px;">
-                <label>时间排序</label>
+            <div class="form-item">
+                <label for="sort-order">时间排序规则</label>
                 <select id="sort-order" onchange="loadData()">
                     <option value="desc" selected>时间逆序 (最新在上)</option>
                     <option value="asc">时间顺序 (最早在上)</option>
                 </select>
             </div>
-            <div style="display:flex; gap:8px; align-items: flex-end;">
-                <button type="button" class="btn-filter" onclick="loadData()">🔍 筛选</button>
-                <button type="button" class="btn-reset" onclick="resetFilter()">重置</button>
-                <button type="button" class="btn-export" onclick="exportToExcel()">📥 导出 Excel</button>
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <button type="button" class="btn-primary" onclick="loadData()" style="padding: 8px 18px;">
+                    🔍 执行筛选
+                </button>
+                <button type="button" class="btn-ghost" onclick="resetFilter()" style="padding: 8px 14px;">
+                    重置
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- 3. 数据表格 -->
-    <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-            <h2>📑 账单明细列表 (<span id="total-count">0</span> 条)</h2>
-            <span style="font-size:12px; color:#94A3B8;">💡 点击表头"日期"可快速切换升降序；双击单元格可修改数值</span>
+    <!-- 3. 动态实时统计条 (Summary KPI Bar - 新增亮点) -->
+    <div class="summary-kpi-bar" id="summary-bar">
+        <div class="summary-kpi-card kpi-count">
+            <span class="kpi-label">匹配记录数</span>
+            <span class="kpi-num" id="sum-count">0 笔</span>
         </div>
+        <div class="summary-kpi-card kpi-expense">
+            <span class="kpi-label">区间总支出 (EX+AR-AP)</span>
+            <span class="kpi-num" id="sum-expense" style="color: var(--color-danger);">¥0.00</span>
+        </div>
+        <div class="summary-kpi-card kpi-income">
+            <span class="kpi-label">区间总收入 (IN)</span>
+            <span class="kpi-num" id="sum-income" style="color: var(--color-success);">¥0.00</span>
+        </div>
+        <div class="summary-kpi-card kpi-net">
+            <span class="kpi-label">资金净变动 (结余)</span>
+            <span class="kpi-num" id="sum-net">¥0.00</span>
+        </div>
+    </div>
+
+    <!-- 4. 数据表格流水列表 (Card 3) -->
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header-flex" style="margin-bottom: 12px;">
+            <h2>📑 账单明细流水 (<span id="total-count">0</span> 条记录)</h2>
+            <span style="font-size: 12px; color: var(--color-text-tertiary);">
+                💡 点击表头“日期”可倒序/升序切换；单击任意单元格可即时就地修改
+            </span>
+        </div>
+
         <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 50px;">ID</th>
-                        <th class="sortable-th" onclick="toggleSort()">日期 <span id="sort-indicator">↓</span></th>
-                        <th>时间</th>
-                        <th>交易类型</th>
-                        <th>分类</th>
-                        <th>品名</th>
-                        <th>金额</th>
-                        <th>源账户</th>
-                        <th>目标账户</th>
-                        <th>备注</th>
-                        <th style="width: 80px;">操作</th>
+                        <th style="width: 55px;">ID</th>
+                        <th class="sortable-th" onclick="toggleSort()" style="width: 100px;">
+                            日期 <span id="sort-indicator">↓</span>
+                        </th>
+                        <th style="width: 75px;">时间</th>
+                        <th style="width: 95px;">类型</th>
+                        <th style="width: 110px;">分类</th>
+                        <th>品名 / 消费项目</th>
+                        <th style="width: 110px; text-align: right;">实际金额</th>
+                        <th style="width: 110px;">支付源账户</th>
+                        <th style="width: 130px;">目标商户</th>
+                        <th>备注说明</th>
+                        <th style="width: 70px; text-align: center;">操作</th>
                     </tr>
                 </thead>
-                <tbody id="table-body"></tbody>
+                <tbody id="table-body">
+                    <tr><td colspan="11" style="text-align:center; padding:30px; color:var(--color-text-tertiary);">加载中...</td></tr>
+                </tbody>
             </table>
         </div>
     </div>
+
 </div>
 
-<!-- 语音智能记账悬浮按钮 -->
-<button class="fab-voice" onclick="triggerVoiceAssistant()" title="AI 语音智能记账">🎤</button>
+<!-- 移动端智能记账悬浮按钮 -->
+<button class="fab-voice" onclick="triggerVoiceAssistant()" title="AI 语音/口语智能记账">🎤</button>
 
 <script src="auth.js"></script>
 <script src="manager.js"></script>
 <script>
-    // 初始化导航状态
+    // 导航管理权限状态检查
     (async () => {
         try {
             const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
             if (res.ok) {
                 const me = await res.json();
                 if (me.role === 'admin') {
-                    document.getElementById('nav-logs').style.display = 'inline-block';
+                    const navLogs = document.getElementById('nav-logs');
+                    if (navLogs) navLogs.style.display = 'inline-block';
                 }
             }
         } catch (e) {}
@@ -294,29 +680,35 @@
                 sendToAiParse(transcript);
             };
         } else {
-            const text = prompt("请输入你的记账口语（支持智能识别）：");
+            const text = prompt("请输入你的记账口语（支持智能提取）：");
             if (text) sendToAiParse(text);
         }
     }
 
     async function sendToAiParse(text) {
-        const res = await fetch('/api/ai/parse_expense', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text })
-        });
-        if (res.ok) {
-            const item = await res.json();
-            document.getElementById('date').value = item.日期;
-            document.getElementById('time').value = item.时间 || '12:00';
-            document.getElementById('type').value = item.交易类型;
-            document.getElementById('category').value = item.分类;
-            document.getElementById('name').value = item.品名;
-            document.getElementById('amount').value = item.实际金额;
-            document.getElementById('pay_acc').value = item.支付账户;
-            document.getElementById('merchant').value = item.目标账户;
-            document.getElementById('remark').value = item.备注;
-            alert("AI 已自动提取信息并填入表单，请核对后提交！");
+        try {
+            const res = await fetch('/api/ai/parse_expense', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            if (res.ok) {
+                const item = await res.json();
+                document.getElementById('date').value = item.日期;
+                document.getElementById('time').value = item.时间 || '12:00';
+                document.getElementById('type').value = item.交易类型;
+                document.getElementById('category').value = item.分类;
+                document.getElementById('name').value = item.品名;
+                document.getElementById('amount').value = item.实际金额;
+                document.getElementById('pay_acc').value = item.支付账户;
+                document.getElementById('merchant').value = item.目标账户;
+                document.getElementById('remark').value = item.备注;
+                alert("✅ AI 已自动提取流水信息并填入表单，请核对后点击下方提交即可！");
+            } else {
+                alert("AI 提取未能识别有效流水，请检查输入或手动填写");
+            }
+        } catch (e) {
+            alert("网络异常，无法调用 AI 识别服务");
         }
     }
 </script>

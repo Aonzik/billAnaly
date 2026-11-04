@@ -1,4 +1,5 @@
 // static/manager.js
+// BillAnaly - 记账管理交互逻辑脚本 (Fintech 极简浅色优化版)
 
 function cleanAccountCode(val) {
     if (!val) return '';
@@ -7,11 +8,11 @@ function cleanAccountCode(val) {
 }
 
 const TYPE_MAP = {
-    'EX': '支出（EX）',
-    'IN': '收入（IN）',
-    'AP': '收回（AP）',
-    'AR': '垫付（AR）',
-    'TR': '转移（TR）'
+    'EX': '支出 EX',
+    'IN': '收入 IN',
+    'AP': '收回 AP',
+    'AR': '垫付 AR',
+    'TR': '转移 TR'
 };
 
 const ACC_MAP = {
@@ -22,6 +23,75 @@ const ACC_MAP = {
     'HB': '花呗（HB）'
 };
 
+// 格式化金额显示 (带千分位与两位小数)
+function formatMoney(num) {
+    return '¥' + Number(num || 0).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+// 快捷时间胶囊交互
+function setQuickPeriod(type) {
+    const startInput = document.getElementById('filter-start');
+    const endInput = document.getElementById('filter-end');
+    if (!startInput || !endInput) return;
+
+    // 清空所有 pill 激活状态
+    document.querySelectorAll('.pill-btn').forEach(btn => btn.classList.remove('active'));
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth(); // 0-based
+    const d = now.getDate();
+
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+    if (type === 'all') {
+        startInput.value = '';
+        endInput.value = '';
+        const pill = document.getElementById('pill-all');
+        if (pill) pill.classList.add('active');
+    } else if (type === 'this_month') {
+        const firstDay = new Date(y, m, 1);
+        const lastDay = new Date(y, m + 1, 0);
+        startInput.value = fmt(firstDay);
+        endInput.value = fmt(lastDay);
+        const pill = document.getElementById('pill-this-month');
+        if (pill) pill.classList.add('active');
+    } else if (type === 'last_month') {
+        const firstDay = new Date(y, m - 1, 1);
+        const lastDay = new Date(y, m, 0);
+        startInput.value = fmt(firstDay);
+        endInput.value = fmt(lastDay);
+        const pill = document.getElementById('pill-last-month');
+        if (pill) pill.classList.add('active');
+    } else if (type === '7d') {
+        const past = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+        startInput.value = fmt(past);
+        endInput.value = fmt(now);
+        const pill = document.getElementById('pill-7d');
+        if (pill) pill.classList.add('active');
+    } else if (type === '30d') {
+        const past = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+        startInput.value = fmt(past);
+        endInput.value = fmt(now);
+        const pill = document.getElementById('pill-30d');
+        if (pill) pill.classList.add('active');
+    } else if (type === 'this_year') {
+        const firstDay = new Date(y, 0, 1);
+        const lastDay = new Date(y, 11, 31);
+        startInput.value = fmt(firstDay);
+        endInput.value = fmt(lastDay);
+        const pill = document.getElementById('pill-year');
+        if (pill) pill.classList.add('active');
+    }
+
+    // 触发数据重载
+    loadData();
+}
+
 // 点击表头快捷翻转排序
 function toggleSort() {
     const sortSelect = document.getElementById('sort-order');
@@ -29,7 +99,7 @@ function toggleSort() {
     loadData();
 }
 
-// 核心数据拉取与筛选
+// 核心数据拉取、筛选与实时动态汇总
 async function loadData() {
     const start = document.getElementById('filter-start').value;
     const end = document.getElementById('filter-end').value;
@@ -38,7 +108,6 @@ async function loadData() {
     const acc = document.getElementById('filter-account').value;
     const sortOrder = document.getElementById('sort-order').value;
 
-    // ======= 新增获取项 =======
     const name = document.getElementById('filter-name').value.trim();
     const type = document.getElementById('filter-type').value;
     const merchant = document.getElementById('filter-merchant').value.trim();
@@ -60,7 +129,6 @@ async function loadData() {
     if (acc) params.append('pay_acc', acc);
     params.append('sort_order', sortOrder);
 
-    // ======= 附加新增参数 =======
     if (name) params.append('name', name);
     if (type) params.append('trans_type', type);
     if (merchant) params.append('merchant', merchant);
@@ -72,11 +140,52 @@ async function loadData() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        document.getElementById('total-count').innerText = data.length;
-        const tbody = document.getElementById('table-body');
+        // 1. 统计当前筛选结果的指标小计
+        let totalExpense = 0;
+        let totalIncome = 0;
 
+        data.forEach(item => {
+            const amt = Number(item.实际金额) || 0;
+            const t = item.交易类型;
+            if (t === 'EX') {
+                totalExpense += amt;
+            } else if (t === 'AR') {
+                totalExpense += amt; // 垫付算作当期现金流出
+            } else if (t === 'AP') {
+                totalExpense -= amt; // 垫付收回冲减支出
+            } else if (t === 'IN') {
+                totalIncome += amt;
+            }
+        });
+
+        const netGrowth = totalIncome - totalExpense;
+
+        // 更新 Summary KPI Bar 动态统计条
+        const sumCountElem = document.getElementById('sum-count');
+        const sumExpenseElem = document.getElementById('sum-expense');
+        const sumIncomeElem = document.getElementById('sum-income');
+        const sumNetElem = document.getElementById('sum-net');
+        const totalCountElem = document.getElementById('total-count');
+
+        if (sumCountElem) sumCountElem.innerText = `${data.length} 笔`;
+        if (totalCountElem) totalCountElem.innerText = data.length;
+        if (sumExpenseElem) sumExpenseElem.innerText = formatMoney(totalExpense);
+        if (sumIncomeElem) sumIncomeElem.innerText = formatMoney(totalIncome);
+
+        if (sumNetElem) {
+            if (netGrowth >= 0) {
+                sumNetElem.innerText = `+${formatMoney(netGrowth)}`;
+                sumNetElem.style.color = 'var(--color-success)';
+            } else {
+                sumNetElem.innerText = `-${formatMoney(Math.abs(netGrowth))}`;
+                sumNetElem.style.color = 'var(--color-danger)';
+            }
+        }
+
+        // 2. 渲染流水表格
+        const tbody = document.getElementById('table-body');
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:24px;">未查找到匹配条件的账单记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--color-text-tertiary);padding:36px;">未查找到匹配条件的账单记录</td></tr>';
             return;
         }
 
@@ -85,25 +194,47 @@ async function loadData() {
             const accDisplay = ACC_MAP[item.支付账户] || item.支付账户 || '-';
             const tarDisplay = ACC_MAP[item.目标账户] || item.目标账户 || '-';
             const itemId = item.id;
+            const amt = Number(item.实际金额 || 0);
+
+            // 金额符号与着色
+            let amtStr = '';
+            let amtClass = 'amount-neutral';
+            if (item.交易类型 === 'EX') {
+                amtStr = `-¥${amt.toFixed(2)}`;
+                amtClass = 'amount-expense';
+            } else if (item.交易类型 === 'IN') {
+                amtStr = `+¥${amt.toFixed(2)}`;
+                amtClass = 'amount-income';
+            } else if (item.交易类型 === 'AP') {
+                amtStr = `¥${amt.toFixed(2)}`;
+                amtClass = 'amount-income';
+            } else {
+                amtStr = `¥${amt.toFixed(2)}`;
+                amtClass = 'amount-neutral';
+            }
 
             return `
                 <tr id="row-${itemId}">
-                    <td style="color:#64748b; font-weight:bold;">${itemId}</td>
-                    <td class="editable-cell" data-field="日期" onclick="inlineEdit(this, ${itemId})">${item.日期}</td>
-                    <td class="editable-cell" data-field="时间" onclick="inlineEdit(this, ${itemId})">${item.时间 || ''}</td>
-                    <td class="editable-cell" data-field="交易类型" data-raw="${item.交易类型}" onclick="inlineEditType(this, ${itemId})">
+                    <td style="color:var(--color-text-tertiary); font-weight:600; font-variant-numeric:tabular-nums;">#${itemId}</td>
+                    <td class="editable-cell" data-field="日期" onclick="inlineEdit(this, ${itemId})" title="点击编辑日期">${item.日期}</td>
+                    <td class="editable-cell" data-field="时间" onclick="inlineEdit(this, ${itemId})" style="color:var(--color-text-tertiary);">${item.时间 || '-'}</td>
+                    <td class="editable-cell" data-field="交易类型" data-raw="${item.交易类型}" onclick="inlineEditType(this, ${itemId})" title="点击切换类型">
                         <span class="badge-type type-${item.交易类型}">${typeDisplay}</span>
                     </td>
-                    <td class="editable-cell" data-field="分类" onclick="inlineEdit(this, ${itemId})">${item.分类}</td>
-                    <td class="editable-cell" data-field="品名" onclick="inlineEdit(this, ${itemId})"><b>${item.品名}</b></td>
-                    <td class="editable-cell" data-field="实际金额" onclick="inlineEdit(this, ${itemId})" style="color: #c0392b; font-weight: bold;">
-                        ${Number(item.实际金额).toFixed(2)}
+                    <td class="editable-cell" data-field="分类" onclick="inlineEdit(this, ${itemId})">
+                        <span style="font-weight:600; color:var(--color-text-primary);">${item.分类}</span>
                     </td>
-                    <td class="editable-cell" data-field="支付账户" onclick="inlineEdit(this, ${itemId})">${accDisplay}</td>
-                    <td class="editable-cell" data-field="目标账户" onclick="inlineEdit(this, ${itemId})">${tarDisplay}</td>
-                    <td class="editable-cell" data-field="备注" onclick="inlineEdit(this, ${itemId})">${item.备注 || ''}</td>
-                    <td>
-                        <button class="btn-action btn-del" onclick="deleteItem(${itemId})">删除</button>
+                    <td class="editable-cell" data-field="品名" onclick="inlineEdit(this, ${itemId})">
+                        <span style="color:var(--color-text-primary);">${item.品名}</span>
+                    </td>
+                    <td class="editable-cell amount-cell ${amtClass}" data-field="实际金额" onclick="inlineEdit(this, ${itemId})" style="text-align: right;" title="点击修改金额">
+                        ${amtStr}
+                    </td>
+                    <td class="editable-cell" data-field="支付账户" onclick="inlineEdit(this, ${itemId})" style="color:var(--color-text-secondary);">${accDisplay}</td>
+                    <td class="editable-cell" data-field="目标账户" onclick="inlineEdit(this, ${itemId})" style="color:var(--color-text-secondary);">${tarDisplay}</td>
+                    <td class="editable-cell" data-field="备注" onclick="inlineEdit(this, ${itemId})" style="color:var(--color-text-tertiary);">${item.备注 || '-'}</td>
+                    <td style="text-align: center;">
+                        <button class="btn-action-del" onclick="deleteItem(${itemId})" title="删除此条流水">🗑️ 删除</button>
                     </td>
                 </tr>
             `;
@@ -118,15 +249,12 @@ function applyUrlFilterParams() {
     const urlParams = new URLSearchParams(window.location.search);
     let hasFilter = false;
 
-    // 1. 日期联动：对齐真实的 filter-start 和 filter-end ID
-    //    支持单日精确筛选 date（金额堆叠图跳转），以及起止区间 start_date + end_date（按月份跳转）
-    const startInput = document.getElementById('filter-start') || document.getElementById('filter-start-date');
-    const endInput = document.getElementById('filter-end') || document.getElementById('filter-end-date');
+    const startInput = document.getElementById('filter-start');
+    const endInput = document.getElementById('filter-end');
     const dateVal = urlParams.get('date');
     const startVal = urlParams.get('start_date');
     const endVal = urlParams.get('end_date');
     if (dateVal) {
-        // 单日筛选：起止日期同设为该日
         if (startInput) startInput.value = dateVal;
         if (endInput) endInput.value = dateVal;
         hasFilter = true;
@@ -141,7 +269,6 @@ function applyUrlFilterParams() {
         }
     }
 
-    // 2. 消费分类联动 + 自动勾选精确匹配
     const catVal = urlParams.get('category');
     if (catVal) {
         const catSelect = document.getElementById('filter-category');
@@ -149,31 +276,24 @@ function applyUrlFilterParams() {
             catSelect.value = catVal;
             hasFilter = true;
         }
-
-        // 核心修复：自动激活“精确匹配”，防止“饮食*”混入“饮食”
         const exactCheck = document.getElementById('filter-exact');
         if (exactCheck) {
             exactCheck.checked = true;
         }
     }
 
-    // 3. 商户联动 (目标账户)
     const merchantVal = urlParams.get('merchant');
     if (merchantVal) {
-        const merchantInput = document.getElementById('filter-merchant') || 
-                              document.getElementById('filter-target-account') || 
-                              document.getElementById('filter-keyword');
+        const merchantInput = document.getElementById('filter-merchant');
         if (merchantInput) {
             merchantInput.value = merchantVal;
             hasFilter = true;
         }
     }
 
-    // 4. 词云关键词/品名联动
     const keywordVal = urlParams.get('keyword');
     if (keywordVal) {
-        const nameInput = document.getElementById('filter-name') || 
-                          document.getElementById('filter-keyword');
+        const nameInput = document.getElementById('filter-name');
         if (nameInput) {
             nameInput.value = keywordVal;
             hasFilter = true;
@@ -192,10 +312,10 @@ function inlineEdit(cell, id) {
     if (cell.querySelector('input')) return;
 
     const field = cell.getAttribute('data-field');
-    const oldText = cell.innerText.trim();
+    const oldText = cell.innerText.replace(/^[+-¥\s]+/, '').trim(); // 提取纯净数值
     const input = document.createElement('input');
     input.className = 'cell-input';
-    input.value = oldText;
+    input.value = (field === '实际金额') ? oldText : cell.innerText.trim();
 
     cell.innerHTML = '';
     cell.appendChild(input);
@@ -207,7 +327,7 @@ function inlineEdit(cell, id) {
         isSaved = true;
 
         let newVal = input.value.trim();
-        if (field === '支付账户'|| field === '目标账户') newVal = cleanAccountCode(newVal);
+        if (field === '支付账户' || field === '目标账户') newVal = cleanAccountCode(newVal);
         if (field === '实际金额') newVal = parseFloat(newVal) || 0.0;
 
         if (newVal !== oldText) {
@@ -275,7 +395,7 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
 
     const payload = {
         日期: document.getElementById('date').value,
-        时间: document.getElementById('time').value.trim(),
+        时间: document.getElementById('time').value.trim() || '12:00',
         交易类型: document.getElementById('type').value,
         分类: document.getElementById('category').value.trim(),
         品名: document.getElementById('name').value.trim(),
@@ -297,7 +417,6 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
         document.getElementById('merchant').value = '';
         document.getElementById('remark').value = '';
         await fetch('/api/refresh_analysis', { method: 'POST' });
-        // 重新拉取以呈现生成的真实 ID 和正确排序
         loadData();
     }
 });
@@ -308,7 +427,7 @@ async function deleteItem(id) {
         alert("无效数据ID");
         return;
     }
-    if (confirm(`确定删除编号为 ID=${id} 的消费记录吗？`)) {
+    if (confirm(`确定删除编号为 #${id} 的消费记录吗？该操作将即时同步并重新核算月度缓存。`)) {
         await fetch(`/api/db/expenses/${id}`, { method: 'DELETE' });
         await fetch('/api/refresh_analysis', { method: 'POST' });
         loadData();
@@ -317,11 +436,10 @@ async function deleteItem(id) {
 
 // 重置筛选
 function resetFilter() {
-    if (event && event.preventDefault) {
-        event.preventDefault(); // 阻止按钮在 form 内的默认提交行为
+    if (window.event && window.event.preventDefault) {
+        window.event.preventDefault();
     }
 
-    // 辅助清空函数，防止某个元素在 HTML 中不存在时导致整段代码崩溃报错
     const clearVal = (id, defaultVal = '') => {
         const el = document.getElementById(id);
         if (el) el.value = defaultVal;
@@ -331,7 +449,6 @@ function resetFilter() {
         if (el) el.checked = status;
     };
 
-    // 1. 清空所有筛选框
     clearVal('filter-start');
     clearVal('filter-end');
     clearVal('filter-category');
@@ -344,17 +461,20 @@ function resetFilter() {
     clearVal('filter-min-amount');
     clearVal('filter-max-amount');
 
-    // 2. 清除浏览器地址栏中的 ?date=... 参数，避免刷新再次带入
+    // 重置快捷时间胶囊高亮
+    document.querySelectorAll('.pill-btn').forEach(btn => btn.classList.remove('active'));
+    const allPill = document.getElementById('pill-all');
+    if (allPill) allPill.classList.add('active');
+
+    // 清除地址栏查询参数
     if (window.location.search) {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // 3. 执行全量加载
     loadData();
 }
 
 async function exportToExcel() {
-    // 1. 收集当前的各维度筛选条件
     const start = document.getElementById('filter-start').value;
     const end = document.getElementById('filter-end').value;
     const cat = document.getElementById('filter-category').value.trim();
@@ -382,8 +502,7 @@ async function exportToExcel() {
     if (minAmount !== '') params.append('min_amount', minAmount);
     if (maxAmount !== '') params.append('max_amount', maxAmount);
 
-    // 2. 生成一个智能默认文件名（如：账单导出_2026-09-05至2026-09-20.xlsx）
-    let defaultFileName = '账单导出';
+    let defaultFileName = '账单流水明细';
     if (start && end) {
         defaultFileName += `_${start}至${end}`;
     } else if (start) {
@@ -396,13 +515,11 @@ async function exportToExcel() {
     }
     defaultFileName += '.xlsx';
 
-    // 3. 请求后端生成 Excel 数据流
     try {
         const response = await fetch(`/api/db/export_excel?${params.toString()}`);
         if (!response.ok) throw new Error(`导出失败，状态码: ${response.status}`);
         const blob = await response.blob();
 
-        // 4. 方案 A：支持原生“另存为”弹窗（Chrome、Edge 等）
         if ('showSaveFilePicker' in window) {
             try {
                 const handle = await window.showSaveFilePicker({
@@ -414,26 +531,19 @@ async function exportToExcel() {
                         }
                     }]
                 });
-                
-                // 将数据写入用户选定的具体目录与文件名
                 const writable = await handle.createWritable();
                 await writable.write(blob);
                 await writable.close();
-                alert('✅ 账单已成功保存至选定目录！');
+                alert('✅ 账单已成功导出并保存！');
                 return;
             } catch (pickerErr) {
-                // 用户在弹出的系统窗口中点击了“取消”
-                if (pickerErr.name === 'AbortError') {
-                    console.log('用户取消了保存');
-                    return;
-                }
-                console.warn('调用原生文件窗口失败，转用降级方案:', pickerErr);
+                if (pickerErr.name === 'AbortError') return;
+                console.warn('文件保存窗口取消或不支持，调用备选下载:', pickerErr);
             }
         }
 
-        // 5. 方案 B：降级方案（浏览器弹 prompt 自定义文件名后下载）
         const customName = prompt('请输入要保存的 Excel 文件名：', defaultFileName);
-        if (!customName) return; // 用户点击取消
+        if (!customName) return;
 
         const finalName = customName.endsWith('.xlsx') ? customName : `${customName}.xlsx`;
         const blobUrl = window.URL.createObjectURL(blob);
@@ -451,13 +561,21 @@ async function exportToExcel() {
     }
 }
 
-
 // 初始化默认今日日期
 document.getElementById('date').value = new Date().toISOString().split('T')[0];
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. 读取 URL 传递过来的跳转参数并回填到界面筛选框
-    applyUrlFilterParams();
+    const hasFilter = applyUrlFilterParams();
 
-    // 2. 执行原有的加载流水数据逻辑（此时收集筛选参数的函数会自动读取回填好的值）
-    loadData(); 
+    // 2. 如果没有特定 URL 过滤，默认 pill 处于“全部流水”状态
+    if (!hasFilter) {
+        const pill = document.getElementById('pill-all');
+        if (pill) pill.classList.add('active');
+    } else {
+        document.querySelectorAll('.pill-btn').forEach(btn => btn.classList.remove('active'));
+    }
+
+    // 3. 执行加载流水数据
+    loadData();
 });
