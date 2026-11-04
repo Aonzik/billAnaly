@@ -355,6 +355,13 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
     all_dates = sorted(set(daily_ex) | set(daily_ar) | set(daily_ap))
     daily_net = [(d, daily_ex[d] + daily_ar[d] - daily_ap[d]) for d in all_dates]
 
+    # 逐日房租：仅供前端"累计消费进度"曲线使用（含房租口径），
+    # 不参与上面的 net_expenses / 柱状图 / 安全基准线计算
+    daily_rent_map = defaultdict(float)
+    for r in recs:
+        if r["交易类型"] == "EX" and is_rent(r):
+            daily_rent_map[r["日期"]] += r["实际金额"]
+
     # 确定核算年份与月份：显式传入优先，否则沿用首条记录的日期（跨年份安全）
     if year is None or month is None:
         parsed_year, parsed_month = (None, None)
@@ -469,6 +476,10 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
             "dates": [d for d, _ in daily_net],
             "net_expenses": [
                 round(v, 2) for _, v in daily_net
+            ],
+            # 与 dates 严格等长；当日无房租则为 0
+            "daily_rent": [
+                round(daily_rent_map.get(d, 0.0), 2) for d, _ in daily_net
             ],
             "categories": categories,
             "pivot_data": {

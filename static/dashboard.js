@@ -119,6 +119,88 @@ function renderBarLineChart(data, colorMap) {
     const pivot = data.daily_trend.pivot_data;
     const safeBaseline = data.budget.safe_daily_baseline;
 
+    // ---------------- 累计消费进度（背景曲线，含房租口径） ----------------
+    const CUM_SERIES_NAME = '累计消费进度';
+    const LEGEND_TOTAL_NAME = '每日净支出走势';
+    const PCT_AXIS_MAX = 100;   // 右轴顶端固定 100%，超出部分交给 clip 裁掉
+
+    const monthlyBudget = Number((data.budget || {}).monthly_budget)
+        || Number(getCurrentBudget()) || 0;
+    const netExpenses = data.daily_trend.net_expenses || [];
+    const dailyRent = data.daily_trend.daily_rent || [];   // 后端新增字段，缺失按 0 兜底
+    const legendItems = [...categories, LEGEND_TOTAL_NAME];
+
+    const firstYm = dates.length ? String(dates[0]).slice(0, 7) : '';
+    const [selYear, selMonth] = firstYm ? firstYm.split('-').map(Number) : [0, 0];
+    const today = new Date();
+    const isCurrentMonth = selYear === today.getFullYear()
+        && selMonth === today.getMonth() + 1;
+    const cutoffDay = isCurrentMonth ? today.getDate() : 31;
+
+    // 逐日累计：跨月时按月份分段重新累计（兼容"全部"模式的跨月数据）
+    let accAmount = 0;
+    let accMonth = '';
+    const cumData = dates.map((d, i) => {
+        const monthKey = String(d).slice(0, 7);
+        if (monthKey !== accMonth) { accAmount = 0; accMonth = monthKey; }
+        if (isCurrentMonth && Number(String(d).slice(8, 10)) > cutoffDay) return null;
+        accAmount += (Number(netExpenses[i]) || 0) + (Number(dailyRent[i]) || 0);
+        if (!(monthlyBudget > 0)) return null;
+        const real = Number((accAmount / monthlyBudget * 100).toFixed(2));
+        return {
+            // 画出来的值钳在 100：超出预算的那一段不再画到网格外，而是贴着顶边，
+            // 避免只留下被裁剪的碎片；真实百分比留在 real 里给 tooltip / 角标
+            value: Math.min(real, PCT_AXIS_MAX),
+            real: real,
+            money: Number(accAmount.toFixed(2))                           // tooltip / 角标金额
+        };
+    });
+
+    const cumLast = cumData.filter(Boolean).slice(-1)[0] || null;
+    const cumOverBudget = !!(cumLast && cumLast.real > PCT_AXIS_MAX);
+
+    // 窄屏（手机/单栏）顶部已被标题、图例占满，角标改到底部并加浅色底
+    const narrowChart = chartDom.clientWidth < 520;
+
+    // 常驻角标（仅宽屏）：曲线被裁剪后，进度数值依然可读
+    const cumBadge = (cumLast && monthlyBudget > 0 && !narrowChart) ? {
+        type: 'text',
+        silent: true,
+        z: 20,
+        right: 8,
+        top: 108,
+        style: {
+            text: '累计 ' + cumLast.real.toFixed(1) + '%   ¥' + cumLast.money.toFixed(0)
+                + ' / ¥' + monthlyBudget.toFixed(0)
+                + (cumOverBudget ? '   ▲ 已超预算' : ''),
+            fill: cumOverBudget ? '#ef4444' : '#2563eb',
+            font: 'bold 12px sans-serif',
+            backgroundColor: 'rgba(255,255,255,0.88)',
+            padding: [2, 4]
+        }
+    } : null;
+
+    // ---------------- 图例两态交互（全显态单击=隔离，其余=逐项切换） ----------------
+    function makeAllSelected() {
+        const map = {};
+        legendItems.forEach(n => { map[n] = true; });
+        return map;
+    }
+
+    function allCategoriesVisible(sel) {
+        return categories.every(c => sel[c] !== false);
+    }
+
+    let legendSelected = makeAllSelected();   // 我们自己维护的"上一次已应用"状态
+    let legendGuard = false;                  // 程序化 setOption 时的防递归哨兵
+
+    function applyLegendSelected(sel) {
+        legendSelected = sel;
+        legendGuard = true;
+        chart.setOption({ legend: { selected: sel } });
+        legendGuard = false;
+    }
+
     const seriesList = categories.map(cat => ({
         name: cat,
         type: 'bar',
@@ -145,6 +227,57 @@ function renderBarLineChart(data, colorMap) {
             }]
         }
     });
+
+    // 背景累计消费进度曲线：挂右轴（百分比），不参与左轴金额自适应
+    if (monthlyBudget > 0) {
+        // 房租入账日标注：解释"柱子没涨、曲线却跳"；>100% 的点不标（会被裁掉）
+        const rentPoints = cumData
+            .map((v, i) => ({ v, i }))
+            .filter(o => o.v && o.v.value <= PCT_AXIS_MAX && (Number(dailyRent[o.i]) || 0) > 0)
+            .map(o => ({
+                name: '房租',
+                coord: [dates[o.i], o.v.value],
+                value: Number(dailyRent[o.i]),
+                label: {
+                    show: true,
+                    fontSize: 10,
+                    color: '#fff',
+                    formatter: '房租 ¥' + Number(dailyRent[o.i]).toFixed(0)
+                }
+            }));
+
+        seriesList.push({
+            name: CUM_SERIES_NAME,
+            type: 'line',
+            yAxisIndex: 1,      // 必须挂右轴，挂左轴会把金额轴顶到累计值
+            z: 1,               // 压在柱状图（默认 z=2）之下
+            clip: true,         // 超出网格（>100%）的部分自动隐藏
+            smooth: false,
+            symbol: 'circle',
+            symbolSize: 5,
+            showSymbol: true,
+            connectNulls: false,
+            data: cumData,
+            lineStyle: { color: 'rgba(96,165,250,0.95)', width: 2 },
+            itemStyle: { color: '#60a5fa' },
+            areaStyle: {
+                color: {
+                    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: 'rgba(96,165,250,0.16)' },
+                        { offset: 1, color: 'rgba(96,165,250,0.01)' }
+                    ]
+                }
+            },
+            markPoint: {
+                symbol: 'pin',
+                symbolSize: 30,
+                z: 6,
+                itemStyle: { color: '#f59e0b' },
+                data: rentPoints
+            }
+        });
+    }
 
     const MOBILE_BREAKPOINT = 768;
     const checkboxElem = document.getElementById('toggle-datazoom');
@@ -199,7 +332,8 @@ function renderBarLineChart(data, colorMap) {
             grid: {
                 left: '3%',
                 right: '4%',
-                top: 90, // 给顶部标题和图例留出足够空间
+                // 宽屏图例允许换行（分类多时一行放不下会翻页，把"每日净支出走势"挤到第 2 页）
+                top: 90,
                 bottom: shouldEnableZoom ? 50 : 36,
                 containLabel: true
             },
@@ -217,35 +351,129 @@ function renderBarLineChart(data, colorMap) {
         });
     }
 
+    // 右轴只在预算有效时出现：预算为 0 时退化成原来的单轴图，避免留一条空百分比轴
+    const yAxisList = [{
+        // 左轴：保持自适应，只服务堆叠柱与每日净支出线的金额刻度
+        type: 'value',
+        name: '金额 (元)',
+        nameGap: 14,
+        nameTextStyle: {
+            align: 'center',
+            padding: [0, 6, 0, 0]
+        }
+    }];
+    if (monthlyBudget > 0) {
+        yAxisList.push({
+            // 右轴：累计消费进度百分比（与左轴金额刻度各自独立）
+            type: 'value',
+            // 轴名不写：百分比刻度 + 右上角角标已经说明含义，写了会和图例翻页按钮抢位置
+            name: '',
+            min: 0,
+            max: PCT_AXIS_MAX,
+            splitNumber: 5,
+            axisLabel: { formatter: '{value}%' },
+            splitLine: { show: false },
+            axisLine: { show: false },
+            axisTick: { show: false },
+            nameTextStyle: { align: 'center' }
+        });
+    }
+
+    // 窄屏顶部空间紧张：进度写进副标题，不再画浮层角标（否则会压住横轴日期）
+    const narrowSubtext = '预算 ¥' + monthlyBudget.toFixed(0)
+        + (cumLast ? ' ｜ 累计 ' + cumLast.real.toFixed(1) + '%' : '')
+        + (cumOverBudget ? ' ▲超' : '');
+
     chart.setOption({
         title: {
             text: '逐日日常支出分类构成与净支出走势',
-            subtext: '鼠标悬停可查看每日分类明细与走势',
+            subtext: narrowChart ? narrowSubtext : '鼠标悬停可查看每日分类明细与走势',
             left: 'center',
             top: 6
         },
         tooltip: {
             trigger: 'axis',
-            axisPointer: { type: 'cross' }
+            axisPointer: { type: 'cross' },
+            formatter: function (params) {
+                const rows = Array.isArray(params) ? params : [params];
+                if (!rows.length) return '';
+                const out = ['<b>' + rows[0].axisValue + '</b>'];
+                let catSum = 0;
+                rows.forEach(p => {
+                    const v = p.value;
+                    const raw = (v && typeof v === 'object') ? v.value : v;
+                    if (raw == null || raw === '') return;
+                    const marker = p.marker || '';
+                    if (p.seriesName === CUM_SERIES_NAME) {
+                        // ECharts 会把 {value, money} 解析成标量传给 params.value，
+                        // 所以金额必须回查 cumData，不能从 params 上取
+                        const item = cumData[p.dataIndex];
+                        const money = item ? item.money : null;
+                        const realPct = item && item.real != null ? item.real : Number(raw);
+                        const rent = Number(dailyRent[p.dataIndex]) || 0;
+                        out.push(marker + p.seriesName + '：<b>' + realPct.toFixed(1) + '%</b>'
+                            + (money == null ? '' : ' <span style="color:#94a3b8">(¥'
+                                + money.toFixed(2) + ' / ¥' + monthlyBudget.toFixed(0) + ')</span>')
+                            + (rent > 0 ? ' <span style="color:#f59e0b">含房租 ¥' + rent.toFixed(0) + '</span>' : ''));
+                    } else if (p.seriesName === LEGEND_TOTAL_NAME) {
+                        out.push(marker + p.seriesName + '：<b>¥' + Number(raw).toFixed(2) + '</b>');
+                    } else {
+                        catSum += Number(raw) || 0;
+                        out.push(marker + p.seriesName + '：¥' + Number(raw).toFixed(2));
+                    }
+                });
+                if (catSum > 0) {
+                    out.push('<span style="color:#64748b">分类合计：¥' + catSum.toFixed(2) + '</span>');
+                }
+                return out.join('<br/>');
+            }
         },
         legend: {
             top: 50,
             type: 'scroll',
             // 避免左右过宽遮挡纵坐标标题和右上角勾选按钮
             left: '12%',
-            right: '12%'
+            right: '12%',
+            // 显式列出图例项：累计曲线不在其中，用户无法把它关掉
+            data: legendItems,
+            selected: makeAllSelected(),
+            selectedMode: true
         },
         xAxis: { type: 'category', data: dates, axisLabel: { rotate: 35 } },
-        yAxis: {
-            type: 'value',
-            name: '金额 (元)',
-            nameGap: 14,
-            nameTextStyle: {
-                align: 'center',
-                padding: [0, 6, 0, 0]
-            }
-        },
+        yAxis: yAxisList,
+        graphic: { elements: cumBadge ? [cumBadge] : [] },
         series: seriesList
+    });
+
+    // 图例两态交互：
+    //   全显态单击分类 → 隔离（只剩该类 + 净支出线）
+    //   隔离态（只剩一个分类可见）单击该类 → 回到全显态
+    //   其余情况 → 沿用 ECharts 默认逐项切换（叠加）
+    chart.off('legendselectchanged');
+    chart.on('legendselectchanged', function (params) {
+        if (legendGuard) return;
+
+        const name = params.name;
+        const next = Object.assign({}, params.selected);   // 点击后的完整选中表
+        const isCategory = categories.indexOf(name) !== -1;
+
+        // 全显态单击分类 → 隔离
+        if (allCategoriesVisible(legendSelected) && isCategory && next[name] === false) {
+            const isolated = {};
+            categories.forEach(c => { isolated[c] = (c === name); });
+            isolated[LEGEND_TOTAL_NAME] = true;            // 总支出线强制保留
+            applyLegendSelected(isolated);
+            return;
+        }
+
+        // 只剩这一个分类可见时再单击它 → 全部恢复
+        const visibleCategories = categories.filter(c => next[c] !== false);
+        if (isCategory && next[name] === false && visibleCategories.length === 0) {
+            applyLegendSelected(makeAllSelected());
+            return;
+        }
+
+        applyLegendSelected(next);
     });
 
     syncZoomState();
