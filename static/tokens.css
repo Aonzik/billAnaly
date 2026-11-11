@@ -67,3 +67,49 @@
   --chart-9: #3B82F6; /* 数字 (天蓝) */
   --chart-10:#EF4444; /* 医疗 (朱红) */
 }
+
+/* ============================================================
+   BillAnaly Design Tokens — Fintech Minimal Dark Theme
+   ============================================================ */
+[data-theme="dark"] {
+  /* —— Color: Primary (更加通透明快的科技紫蓝) —— */
+  --color-primary:       #7C75FF;
+  --color-primary-dark:  #635BFF;
+  --color-primary-light: #9E98FF;
+  --color-primary-bg:    rgba(124, 117, 255, 0.16);
+
+  /* —— Color: Neutral (Stripe / GitHub 沉浸墨黑) —— */
+  --color-bg:            #0B0F19; /* 页面底色 */
+  --color-surface:       #111827; /* 卡片表面 (Slate-900) */
+  --color-border:        #1F2937; /* 分割线 (Slate-800) */
+  --color-border-soft:   #1E293B; /* 次级微分割线 */
+
+  /* —— Color: Text —— */
+  --color-text-primary:   #F8FAFC; /* 纯净明亮主正文 */
+  --color-text-secondary: #94A3B8; /* 次级标签与说明 (Slate-400) */
+  --color-text-tertiary:  #64748B; /* 辅助文字 (Slate-500) */
+
+  /* —— Color: Semantic (夜间柔和高对比) —— */
+  --color-danger:        #F87171;
+  --color-danger-bg:     rgba(239, 68, 68, 0.15);
+  --color-danger-border: rgba(239, 68, 68, 0.35);
+
+  --color-success:       #34D399;
+  --color-success-bg:    rgba(16, 185, 129, 0.15);
+  --color-success-border:rgba(16, 185, 129, 0.35);
+
+  --color-warning:       #FBBF24;
+  --color-warning-bg:    rgba(245, 158, 11, 0.15);
+  --color-warning-border:rgba(245, 158, 11, 0.35);
+
+  --color-info:          #60A5FA;
+  --color-info-bg:       rgba(59, 130, 246, 0.15);
+  --color-info-border:   rgba(59, 130, 246, 0.35);
+
+  /* —— Shadow (深色沉浸阴影) —— */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+}

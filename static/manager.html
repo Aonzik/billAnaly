@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>记账管理 · BillAnaly</title>
     <link rel="icon" href="favicon.ico">
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
     <style>
@@ -216,7 +217,8 @@
             border-collapse: collapse;
             font-size: 13px;
             text-align: left;
-            background: #ffffff;
+            background: var(--color-surface);
+            color: var(--color-text-secondary);
         }
         th, td {
             padding: 10px 12px;
@@ -280,7 +282,8 @@
             border: 1px solid var(--color-primary);
             border-radius: var(--radius-sm);
             font-family: inherit;
-            background: #ffffff;
+            background: var(--color-bg);
+            color: var(--color-text-primary);
             box-shadow: 0 0 0 2px rgba(99,91,255,0.15);
             outline: none;
         }
@@ -376,6 +379,7 @@
             <a href="/logs.html" id="nav-logs" style="display:none;">日志</a>
         </div>
         <div class="topbar-actions">
+            <button class="btn-ghost btn-sm btn-theme-toggle" onclick="toggleTheme()" id="btn-theme-toggle" title="切换深色/浅色模式">🌙</button>
             <button class="btn-danger btn-sm" onclick="logout()">退出登录</button>
         </div>
     </nav>

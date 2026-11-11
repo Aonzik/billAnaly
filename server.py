@@ -33,6 +33,7 @@ PUBLIC_PATHS = {
     "/favicon.ico",
     "/tokens.css",
     "/style.css",
+    "/theme.js",
     "/api/auth/login",
 }
 
@@ -341,7 +342,7 @@ class AuthStaticFiles(StaticFiles):
         rel = path.lstrip("/")
 
         # 登录页及其自有资源（样式/脚本）无需登录
-        if rel in {"login.html", "favicon.ico"} or rel == "":
+        if ("/" + rel) in PUBLIC_PATHS or rel in {"login.html", "favicon.ico"} or rel == "":
             return await super().get_response(path, scope)
 
         request = Request(scope)

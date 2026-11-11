@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <script src="theme.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 · BillAnaly</title>
@@ -121,9 +122,34 @@
             line-height: 1.6;
             text-align: center;
         }
+    
+        /* 深色模式适配 */
+        [data-theme="dark"] body {
+            background: linear-gradient(135deg, #0F172A 0%, #0B0F19 55%, #1E1B4B 100%) !important;
+            color: #F8FAFC !important;
+        }
+        [data-theme="dark"] .login-card {
+            background: #111827 !important;
+            border-color: #1F2937 !important;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4) !important;
+        }
+        [data-theme="dark"] .brand h1 {
+            color: #F8FAFC !important;
+        }
+        [data-theme="dark"] .form-group input {
+            background: #0B0F19 !important;
+            border-color: #1F2937 !important;
+            color: #FFFFFF !important;
+        }
+        [data-theme="dark"] .hint {
+            border-top-color: #1F2937 !important;
+        }
     </style>
 </head>
 <body>
+    <!-- 主题切换按钮 -->
+    <button class="btn-ghost btn-sm btn-theme-toggle" onclick="toggleTheme()" id="btn-theme-toggle" title="切换深色/浅色模式" style="position:fixed; top:20px; right:20px; border-radius:9999px; z-index:100; font-size:16px; padding:7px 12px; background:var(--color-surface); box-shadow:var(--shadow-sm);">🌙</button>
+
 <div class="login-card">
     <div class="brand">
         <div class="logo">💎</div>

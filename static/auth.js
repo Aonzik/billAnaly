@@ -1,5 +1,5 @@
 // static/auth.js
-// 统一的登录态处理：注入右上角用户栏，并对所有 fetch 补上 401 跳转逻辑
+// 统一的登录态处理：将账号信息并入顶部导航栏，并对所有 fetch 补上 401 跳转逻辑
 
 (function () {
     // ---------------------------------------------------------------
@@ -25,9 +25,8 @@
         return res;
     };
 
-    // 覆盖全局 fetch，使既有业务代码（dashboard.js / manager.js）无需改动
+    // 覆盖全局 fetch，使既有业务代码（dashboard.js / manager.js 等）无需改动
     window.fetch = function (input, init) {
-        // 相对路径的站内请求统一走 apiFetch；外链保持原生行为
         const url = typeof input === 'string' ? input : (input && input.url) || '';
         const isExternal = /^https?:\/\//i.test(url) && !url.startsWith(window.location.origin);
         if (isExternal) return originalFetch(input, init);
@@ -35,7 +34,7 @@
     };
 
     // ---------------------------------------------------------------
-    // 2. 用户信息 + 右上角悬浮用户栏
+    // 2. 用户信息 + 顶栏用户徽标（并入上栏固定，杜绝悬浮遮挡）
     // ---------------------------------------------------------------
     window.currentUser = null;
 
@@ -57,71 +56,52 @@
         window.location.replace('/login.html');
     };
 
-    function injectStyle() {
-        if (document.getElementById('auth-bar-style')) return;
-        const style = document.createElement('style');
-        style.id = 'auth-bar-style';
-        style.textContent = `
-            #auth-bar {
-                position: fixed; top: 12px; right: 14px; z-index: 99999;
-                display: flex; align-items: center; gap: 8px;
-                background: rgba(255,255,255,0.96);
-                border: 1px solid #e2e8f0; border-radius: 30px;
-                padding: 5px 6px 5px 14px;
-                box-shadow: 0 3px 14px rgba(15,23,42,0.12);
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-                font-size: 12.5px; color: #334155;
-            }
-            #auth-bar .who { font-weight: 700; color: #0f172a; }
-            #auth-bar .role {
-                font-size: 10.5px; font-weight: 700; padding: 1px 6px;
-                border-radius: 10px; background: #dbeafe; color: #1d4ed8;
-            }
-            #auth-bar .role.user { background: #e2e8f0; color: #475569; }
-            #auth-bar a, #auth-bar button {
-                font-size: 12px; font-weight: 600; text-decoration: none;
-                border: 1px solid #cbd5e1; background: #fff; color: #334155;
-                padding: 4px 10px; border-radius: 20px; cursor: pointer;
-            }
-            #auth-bar a:hover, #auth-bar button:hover { background: #f1f5f9; }
-            #auth-bar .out { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-            #auth-bar .out:hover { background: #fee2e2; }
-        `;
-        document.head.appendChild(style);
-    }
-
-    function injectBar() {
-        if (document.getElementById('auth-bar')) return;
-        injectStyle();
-
-        const bar = document.createElement('div');
-        bar.id = 'auth-bar';
-        bar.innerHTML = `
-            <span>👤 <span class="who">-</span></span>
-            <span class="role" id="auth-role"></span>
-            <a href="/account.html" title="修改账号名与密码">账号管理</a>
-            <button class="out" id="auth-logout-btn">退出</button>
-        `;
-        document.body.appendChild(bar);
-
-        bar.querySelector('#auth-logout-btn').addEventListener('click', window.logout);
-    }
-
-    function fillBar(user) {
+    function injectUserPill(user) {
         if (!user) return;
-        const who = document.querySelector('#auth-bar .who');
-        const role = document.getElementById('auth-role');
-        if (who) who.textContent = user.username;
-        if (role) {
-            role.textContent = user.role === 'admin' ? '管理员' : '普通用户';
-            role.className = 'role' + (user.role === 'admin' ? '' : ' user');
+        
+        // 查找顶部导航右侧操作区 .topbar-actions
+        const topbarActions = document.querySelector('.topbar-actions');
+        if (topbarActions) {
+            let pill = document.getElementById('topbar-user-pill');
+            const roleText = user.role === 'admin' ? '管理员' : '普通用户';
+            const roleClass = user.role === 'admin' ? 'role admin' : 'role user';
+            
+            if (!pill) {
+                pill = document.createElement('a');
+                pill.id = 'topbar-user-pill';
+                pill.href = '/account.html';
+                pill.className = 'topbar-user-pill';
+                pill.title = '点击进入账号管理';
+                pill.innerHTML = `
+                    <span class="avatar">👤</span>
+                    <span class="who">${user.username || '-'}</span>
+                    <span class="${roleClass}" id="topbar-role">${roleText}</span>
+                `;
+                // 插入在操作区最前面（即主题切换按钮左侧）
+                topbarActions.insertBefore(pill, topbarActions.firstChild);
+            } else {
+                const who = pill.querySelector('.who');
+                const role = pill.querySelector('#topbar-role');
+                if (who) who.textContent = user.username || '-';
+                if (role) {
+                    role.textContent = roleText;
+                    role.className = roleClass;
+                }
+            }
+
+            // 若为管理员，同时自动点亮顶栏上的“账号”和“日志”导航入口
+            if (user.role === 'admin') {
+                const navAcc = document.getElementById('nav-account') || document.getElementById('logs-link');
+                const navLogs = document.getElementById('nav-logs');
+                if (navAcc) navAcc.style.display = 'inline-block';
+                if (navLogs) navLogs.style.display = 'inline-block';
+            }
         }
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
         const user = await window.loadCurrentUser();
-        if (!user) return;   // 未登录由后端重定向处理
-        injectBar();
-        fillBar(user);
+        if (!user) return; // 未登录由后端重定向或 401 拦截处理
+        injectUserPill(user);
     });
 })();

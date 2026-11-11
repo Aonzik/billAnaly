@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 提取所有分类并建立固定的映射表
             const categories = data.daily_trend ? data.daily_trend.categories : [];
             const colorMap = buildCategoryColorMap(categories);
+            window._lastExpenseData = data;
+            window._lastColorMap = colorMap;
             renderKpiCards(data);
             renderBarLineChart(data, colorMap);
             renderDonutChart(data, colorMap);
@@ -256,7 +258,7 @@ function renderBarLineChart(data, colorMap) {
                 + (cumOverBudget ? '   ▲ 已超预算' : ''),
             fill: cumOverBudget ? '#EF4444' : '#635BFF',
             font: 'bold 12px sans-serif',
-            backgroundColor: 'rgba(255,255,255,0.88)',
+            backgroundColor: (document.documentElement.getAttribute('data-theme') === 'dark') ? 'rgba(17,24,39,0.92)' : 'rgba(255,255,255,0.88)',
             padding: [2, 4]
         }
     } : null;
@@ -433,6 +435,7 @@ function renderBarLineChart(data, colorMap) {
     }
 
     // 右轴只在预算有效时出现：预算为 0 时退化成原来的单轴图，避免留一条空百分比轴
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const yAxisList = [{
         // 左轴：保持自适应，只服务堆叠柱与每日净支出线的金额刻度
         type: 'value',
@@ -440,19 +443,30 @@ function renderBarLineChart(data, colorMap) {
         nameGap: 14,
         nameTextStyle: {
             align: 'center',
-            padding: [0, 6, 0, 0]
+            padding: [0, 6, 0, 0],
+            color: isDark ? '#94A3B8' : '#64748B'
+        },
+        axisLabel: {
+            color: isDark ? '#94A3B8' : '#64748B'
+        },
+        splitLine: {
+            lineStyle: {
+                color: isDark ? '#1F2937' : '#E2E8F0'
+            }
         }
     }];
     if (monthlyBudget > 0) {
         yAxisList.push({
             // 右轴：累计消费进度百分比（与左轴金额刻度各自独立）
             type: 'value',
-            // 轴名不写：百分比刻度 + 右上角角标已经说明含义，写了会和图例翻页按钮抢位置
             name: '',
             min: 0,
             max: PCT_AXIS_MAX,
             splitNumber: 5,
-            axisLabel: { formatter: '{value}%' },
+            axisLabel: {
+                formatter: '{value}%',
+                color: isDark ? '#94A3B8' : '#64748B'
+            },
             splitLine: { show: false },
             axisLine: { show: false },
             axisTick: { show: false },
@@ -470,7 +484,16 @@ function renderBarLineChart(data, colorMap) {
             text: '逐日日常支出分类构成与净支出走势',
             subtext: narrowChart ? narrowSubtext : '鼠标悬停可查看每日分类明细与走势',
             left: 'center',
-            top: 6
+            top: 6,
+            textStyle: {
+                color: isDark ? '#F8FAFC' : '#0F172A',
+                fontSize: 14,
+                fontWeight: 600
+            },
+            subtextStyle: {
+                color: isDark ? '#64748B' : '#94A3B8',
+                fontSize: 12
+            }
         },
         tooltip: {
             trigger: 'axis',
@@ -512,15 +535,26 @@ function renderBarLineChart(data, colorMap) {
         legend: {
             top: 50,
             type: 'scroll',
-            // 避免左右过宽遮挡纵坐标标题和右上角勾选按钮
             left: '12%',
             right: '12%',
-            // 显式列出图例项：累计曲线不在其中，用户无法把它关掉
             data: legendItems,
             selected: makeAllSelected(),
-            selectedMode: true
+            selectedMode: true,
+            textStyle: {
+                color: isDark ? '#94A3B8' : '#64748B'
+            }
         },
-        xAxis: { type: 'category', data: dates, axisLabel: { rotate: 35 } },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: {
+                rotate: 35,
+                color: (document.documentElement.getAttribute('data-theme') === 'dark') ? '#94A3B8' : '#64748B'
+            },
+            axisLine: {
+                lineStyle: { color: (document.documentElement.getAttribute('data-theme') === 'dark') ? '#374151' : '#E2E8F0' }
+            }
+        },
         yAxis: yAxisList,
         graphic: { elements: cumBadge ? [cumBadge] : [] },
         series: seriesList
@@ -574,12 +608,14 @@ function renderDonutChart(data, colorMap) {
     const chartDom = document.getElementById('nestedDonutChart');
     if (!chartDom) return;
     const chart = echarts.init(chartDom);
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
     // 1. 内环数据：深邃藏青黑(刚性) vs 清爽海天蓝(弹性)，解耦外环分类
     const innerData = (data.donut_chart.inner || []).map(item => ({
         ...item,
         itemStyle: {
-            color: item.name.includes('刚性') ? '#1E293B' : '#0284c7',
-            borderColor: '#ffffff',
+            color: item.name.includes('刚性') ? (isDark ? '#334155' : '#1E293B') : '#0284c7',
+            borderColor: isDark ? '#111827' : '#ffffff',
             borderWidth: 2
         }
     }));
@@ -588,7 +624,9 @@ function renderDonutChart(data, colorMap) {
     const outerData = (data.donut_chart.outer || []).map(item => ({
         ...item,
         itemStyle: {
-            color: colorMap[item.name] || '#cbd5e1' // 与左侧完全一致的颜色
+            color: colorMap[item.name] || '#cbd5e1',
+            borderColor: isDark ? '#111827' : '#ffffff',
+            borderWidth: 1.5
         }
     }));
 
@@ -596,7 +634,16 @@ function renderDonutChart(data, colorMap) {
         title: {
             text: '常规刚性 vs 弹性支出构成双环图',
             subtext: '鼠标悬停图块即时显示金额与占比信息',
-            left: 'center'
+            left: 'center',
+            textStyle: {
+                color: isDark ? '#F8FAFC' : '#0F172A',
+                fontSize: 14,
+                fontWeight: 600
+            },
+            subtextStyle: {
+                color: isDark ? '#64748B' : '#94A3B8',
+                fontSize: 12
+            }
         },
         tooltip: {
             trigger: 'item',
@@ -615,7 +662,10 @@ function renderDonutChart(data, colorMap) {
             left: 'center',
             itemWidth: 14,
             itemHeight: 10,
-            textStyle: { fontSize: 11 }
+            textStyle: {
+                fontSize: 11,
+                color: isDark ? '#94A3B8' : '#64748B'
+            }
         },
         series: [
             // 内环：圆环形态
@@ -627,7 +677,7 @@ function renderDonutChart(data, colorMap) {
                 center: ['50%', '50%'],
                 itemStyle: {
                     borderRadius: 4,
-                    borderColor: '#ffffff',
+                    borderColor: isDark ? '#111827' : '#ffffff',
                     borderWidth: 2
                 },
                 label: {
@@ -666,7 +716,7 @@ function renderDonutChart(data, colorMap) {
                 center: ['50%', '50%'],
                 itemStyle: {
                     borderRadius: 3,
-                    borderColor: '#ffffff',
+                    borderColor: isDark ? '#111827' : '#ffffff',
                     borderWidth: 1.5
                 },
                 avoidLabelOverlap: true,
@@ -676,11 +726,17 @@ function renderDonutChart(data, colorMap) {
                 },
                 label: {
                     formatter: '{b}: ¥{c} ({d}%)',
-                    fontSize: 10.5
+                    fontSize: 10.5,
+                    color: isDark ? '#F8FAFC' : '#1E293B',
+                    textBorderColor: isDark ? '#111827' : '#FFFFFF',
+                    textBorderWidth: isDark ? 3 : 2
                 },
                 labelLine: {
                     length: 10,
-                    length2: 12
+                    length2: 12,
+                    lineStyle: {
+                        color: isDark ? '#64748B' : '#94A3B8'
+                    }
                 },
                 data: outerData
             }
@@ -1210,5 +1266,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initBudgetInput();
     if (typeof initMonthSelector === 'function') {
         initMonthSelector();
+    }
+});
+
+// 监听全局主题切换事件，无刷新重新渲染图表适配深色/浅色
+window.addEventListener('themechange', () => {
+    if (window._lastExpenseData && window._lastColorMap) {
+        renderBarLineChart(window._lastExpenseData, window._lastColorMap);
+        renderDonutChart(window._lastExpenseData, window._lastColorMap);
+        renderWordCloud(window._lastExpenseData);
     }
 });
