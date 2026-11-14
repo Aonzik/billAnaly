@@ -65,6 +65,7 @@
             let pill = document.getElementById('topbar-user-pill');
             const roleText = user.role === 'admin' ? '管理员' : '普通用户';
             const roleClass = user.role === 'admin' ? 'role admin' : 'role user';
+            const perm = window.permissionMeta(user);
             
             if (!pill) {
                 pill = document.createElement('a');
@@ -76,16 +77,23 @@
                     <span class="avatar">👤</span>
                     <span class="who">${user.username || '-'}</span>
                     <span class="${roleClass}" id="topbar-role">${roleText}</span>
+                    <span class="perm ${perm.cls}" id="topbar-perm" title="${perm.full}">${perm.short}</span>
                 `;
                 // 插入在操作区最前面（即主题切换按钮左侧）
                 topbarActions.insertBefore(pill, topbarActions.firstChild);
             } else {
                 const who = pill.querySelector('.who');
                 const role = pill.querySelector('#topbar-role');
+                const permEl = pill.querySelector('#topbar-perm');
                 if (who) who.textContent = user.username || '-';
                 if (role) {
                     role.textContent = roleText;
                     role.className = roleClass;
+                }
+                if (permEl) {
+                    permEl.textContent = perm.short;
+                    permEl.title = perm.full;
+                    permEl.className = 'perm ' + perm.cls;
                 }
             }
 
@@ -96,12 +104,38 @@
                 if (navAcc) navAcc.style.display = 'inline-block';
                 if (navLogs) navLogs.style.display = 'inline-block';
             }
+
+            // 无数据读取权限的账号隐藏数据页入口，只保留账号页
+            if (user.can_read === false) {
+                document.querySelectorAll('.topbar-nav a').forEach(a => {
+                    const href = a.getAttribute('href') || '';
+                    if (!href.includes('account.html')) a.style.display = 'none';
+                });
+            }
         }
     }
+
+    // 权限展示文案（与后端 permission_label 保持一致）
+    window.permissionMeta = function (user) {
+        if (!user) return { cls: 'none', short: '无权限', full: '不可读不可写' };
+        if (user.can_write) return { cls: 'rw', short: '可读写', full: '可读可写' };
+        if (user.can_read) return { cls: 'ro', short: '只读', full: '可读不可写' };
+        return { cls: 'none', short: '无权限', full: '不可读不可写' };
+    };
+
+    // 无读取权限的账号不允许停留在数据页面（后端也会重定向，这里做前端兜底）
+    window.guardReadPermission = function (user) {
+        if (!user) return;
+        if (user.can_read) return;
+        const page = (window.location.pathname.split('/').pop() || '').toLowerCase();
+        if (page === 'account.html' || page === 'login.html' || page === '') return;
+        window.location.replace('/account.html?denied=1');
+    };
 
     document.addEventListener('DOMContentLoaded', async () => {
         const user = await window.loadCurrentUser();
         if (!user) return; // 未登录由后端重定向或 401 拦截处理
+        window.guardReadPermission(user);
         injectUserPill(user);
     });
 })();

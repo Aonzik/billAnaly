@@ -21,6 +21,7 @@ from auth import (
     init_auth_db,
     get_user_from_request,
     require_user,
+    require_read,
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -233,8 +234,11 @@ async def auth_gate(request, call_next):
 
     # 根路径：已登录进看板，未登录去登录页
     if path == "/":
-        if get_user_from_request(request) is not None:
-            return RedirectResponse("/dashboard.html", status_code=302)
+        _root_user = get_user_from_request(request)
+        if _root_user is not None:
+            # 「不可读不可写」账号没有数据页可看，直接进账号页
+            target = "/dashboard.html" if _root_user.get("can_read") else "/account.html"
+            return RedirectResponse(target, status_code=302)
         return RedirectResponse("/login.html", status_code=302)
 
     if get_user_from_request(request) is None:
@@ -250,14 +254,15 @@ async def auth_gate(request, call_next):
 
 # 挂载路由模块（除登录相关接口外，一律要求已登录）
 app.include_router(auth_router)
-app.include_router(db_router, dependencies=[Depends(require_user)])
-app.include_router(ai_router, dependencies=[Depends(require_user)])
-app.include_router(log_router, dependencies=[Depends(require_user)])
+# 数据查询类接口统一要求「可读」权限（写接口在 db_manager 内单独要求「可写」）
+app.include_router(db_router, dependencies=[Depends(require_read)])
+app.include_router(ai_router, dependencies=[Depends(require_read)])
+app.include_router(log_router, dependencies=[Depends(require_read)])
 
 
 # 查询数据库里已有所有月份（格式如 ["2026-09", "2026-10"]）
 @app.get("/api/months")
-def get_available_months(_user: dict = Depends(require_user)):
+def get_available_months(_user: dict = Depends(require_read)):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -275,7 +280,7 @@ def trigger_refresh(
     month: Optional[int] = Query(None),
     year_month: Optional[str] = Query(None),
     monthly_budget: Optional[float] = Query(2300.0),
-    _user: dict = Depends(require_user),
+    _user: dict = Depends(require_read),
 ):
     # 兼容旧调用方的 year_month 参数（如 "2026-09"），拆分为年份与月份
     if (year is None or month is None) and year_month:
@@ -317,7 +322,7 @@ def get_wordcloud_api(
     month: Optional[int] = Query(None),
     year_month: Optional[str] = Query(None),
     top_n: int = Query(80),
-    _user: dict = Depends(require_user),
+    _user: dict = Depends(require_read),
 ):
   """获取支出品名的词云统计数据（支持按频次/按金额，可指定核算年月）"""
   # 兼容旧调用方的 year_month 参数（如 "2026-09"），拆分为年份与月份
@@ -346,13 +351,20 @@ class AuthStaticFiles(StaticFiles):
             return await super().get_response(path, scope)
 
         request = Request(scope)
-        if get_user_from_request(request) is None:
+        user = get_user_from_request(request)
+        if user is None:
             ext = os.path.splitext(rel)[1].lower()
             if ext in _ALLOWED_PAGE_EXT or ext == "":
                 return RedirectResponse(
                     f"/login.html?next={quote('/' + rel)}", status_code=302
                 )
             return JSONResponse({"detail": "未登录或登录已过期，请重新登录"}, status_code=401)
+
+        # 「不可读不可写」账号只能停留在账号页，其它页面一律跳回账号页
+        if not user.get("can_read"):
+            ext = os.path.splitext(rel)[1].lower()
+            if (ext in _ALLOWED_PAGE_EXT or ext == "") and rel != "account.html":
+                return RedirectResponse("/account.html?denied=1", status_code=302)
 
         return await super().get_response(path, scope)
 

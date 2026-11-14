@@ -323,6 +323,24 @@
             border-color: var(--color-danger-border);
         }
 
+        /* 只读账号提示条 */
+        .readonly-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--color-warning-bg);
+            border: 1px solid var(--color-warning-border);
+            color: var(--color-warning);
+            border-radius: var(--radius-md, 10px);
+            padding: 11px 15px;
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 18px;
+        }
+        .readonly-banner b { font-weight: 700; }
+        .readonly-cell { cursor: default !important; }
+        .readonly-cell:hover { background: transparent !important; }
+
         /* 智能记账前置按钮 */
         .btn-ai-assistant {
             display: inline-flex;
@@ -386,8 +404,14 @@
 
 <div class="container">
 
+    <!-- 只读权限提示（无写权限账号可见） -->
+    <div class="readonly-banner" id="readonly-banner" style="display:none;">
+        <span>🔒</span>
+        <span>当前账号为<b>只读</b>权限：可以查询、筛选与导出账单，但不能新增 / 修改 / 删除数据。如需写入权限，请联系管理员开通。</span>
+    </div>
+
     <!-- 1. 快速录入工作台 (Card 1) -->
-    <div class="card">
+    <div class="card" id="entry-form-card">
         <div class="card-header-flex">
             <h2>➕ 录入账单流水</h2>
             <button type="button" class="btn-ai-assistant" onclick="triggerVoiceAssistant()">
@@ -636,7 +660,7 @@
                         <th style="width: 110px;">支付源账户</th>
                         <th style="width: 130px;">目标商户</th>
                         <th>备注说明</th>
-                        <th style="width: 70px; text-align: center;">操作</th>
+                        <th class="col-action" style="width: 70px; text-align: center;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="table-body">

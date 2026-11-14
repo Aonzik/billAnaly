@@ -68,6 +68,21 @@ def _log(action: str, op: str, **fields):
         print(f"[Auth Warning] 日志写入失败: {e}")
 
 
+def _ensure_permission_columns(cur) -> None:
+    """为已存在的旧库补上权限列（幂等迁移）
+
+    can_read  = 1 表示允许查询账单数据
+    can_write = 1 表示允许新增 / 修改 / 删除账单数据（必然同时可读）
+    """
+    cols = {row["name"] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
+    if "can_read" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN can_read INTEGER NOT NULL DEFAULT 1")
+        print(">>> [Auth Migrate] users 表新增权限列 can_read（默认 可读）")
+    if "can_write" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN can_write INTEGER NOT NULL DEFAULT 0")
+        print(">>> [Auth Migrate] users 表新增权限列 can_write（默认 不可写）")
+
+
 def init_auth_db() -> None:
     """建表并在库为空时植入默认管理员账号（幂等，可重复调用）"""
     conn = get_conn()
@@ -81,10 +96,16 @@ def init_auth_db() -> None:
             password_hash TEXT NOT NULL,
             role          TEXT NOT NULL DEFAULT 'user',
             created_by    TEXT DEFAULT '',
-            created_at    TEXT NOT NULL
+            created_at    TEXT NOT NULL,
+            can_read      INTEGER NOT NULL DEFAULT 1,
+            can_write     INTEGER NOT NULL DEFAULT 0
         )
         """
     )
+    # 老版本库没有权限列，这里自动补齐，避免升级后无法登录
+    _ensure_permission_columns(cur)
+    # 管理员账号固定为「可读可写」，且权限不可被变更
+    cur.execute("UPDATE users SET can_read = 1, can_write = 1 WHERE role = 'admin'")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -210,7 +231,7 @@ def get_user_by_token(token: Optional[str]) -> Optional[dict]:
     conn = get_conn()
     row = conn.execute(
         """
-        SELECT u.id, u.username, u.role, s.expires_at
+        SELECT u.id, u.username, u.role, u.can_read, u.can_write, s.expires_at
           FROM sessions s
           JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = ?
@@ -220,7 +241,24 @@ def get_user_by_token(token: Optional[str]) -> Optional[dict]:
     conn.close()
     if row is None or row["expires_at"] < time.time():
         return None
-    return {"id": row["id"], "username": row["username"], "role": row["role"]}
+
+    # 管理员账号始终拥有完整权限（可读可写），不受数据库列值影响
+    if row["role"] == "admin":
+        can_read = can_write = True
+    else:
+        can_read = bool(row["can_read"])
+        can_write = bool(row["can_write"])
+        # 可写必然可读，防止历史脏数据出现「能改不能看」的矛盾状态
+        if can_write:
+            can_read = True
+
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "role": row["role"],
+        "can_read": can_read,
+        "can_write": can_write,
+    }
 
 
 def get_user_from_request(request: Request) -> Optional[dict]:
@@ -255,6 +293,46 @@ def require_admin(user: dict = Depends(require_user)) -> dict:
     return user
 
 
+def require_read(user: dict = Depends(require_user)) -> dict:
+    """数据读取权限：无权读取数据的账号不能调用任何查询接口"""
+    if not user.get("can_read"):
+        oplog.log(
+            f"拒绝访问：账号无数据读取权限（{user.get('username')}）",
+            op=user.get("username", "anonymous"), op_type="ACCESS", table=TABLE,
+            result="denied", status_code=403, permission="不可读不可写",
+        )
+        raise HTTPException(status_code=403, detail="当前账号没有数据读取权限，请联系管理员开通")
+    return user
+
+
+def require_write(user: dict = Depends(require_user)) -> dict:
+    """数据写入权限：只读账号不能新增 / 修改 / 删除账单数据"""
+    if not user.get("can_write"):
+        oplog.log(
+            f"拒绝访问：只读账号尝试写入数据（{user.get('username')}）",
+            op=user.get("username", "anonymous"), op_type="ACCESS", table=TABLE,
+            result="denied", status_code=403, permission="可读不可写",
+        )
+        raise HTTPException(status_code=403, detail="当前账号为只读权限，不能新增 / 修改 / 删除账单数据")
+    return user
+
+
+# -----------------------------------------------------------------------------
+# 权限归一化
+# -----------------------------------------------------------------------------
+def normalize_permission(can_read, can_write):
+    """归一化读写权限：可写必然可读，避免出现「能改不能看」的矛盾组合"""
+    write = bool(can_write)
+    read = bool(can_read) or write
+    return read, write
+
+
+def permission_label(can_read: bool, can_write: bool) -> str:
+    if can_write:
+        return "可读可写"
+    return "可读不可写" if can_read else "不可读不可写"
+
+
 # -----------------------------------------------------------------------------
 # 请求体模型
 # -----------------------------------------------------------------------------
@@ -266,6 +344,15 @@ class LoginBody(BaseModel):
 class CreateUserBody(BaseModel):
     username: str
     password: str
+    # 由管理员创建的账号默认「可读不可写」；管理员可在创建时直接指定
+    can_read: Optional[bool] = True
+    can_write: Optional[bool] = False
+
+
+class UpdatePermissionBody(BaseModel):
+    """权限分配：可读可写 / 可读不可写 / 不可读不可写"""
+    can_read: bool = True
+    can_write: bool = False
 
 
 class ChangeUsernameBody(BaseModel):
@@ -337,12 +424,27 @@ def me(user: dict = Depends(require_user)):
 def list_users(admin: dict = Depends(require_admin)):
     conn = get_conn()
     rows = conn.execute(
-        "SELECT id, username, role, created_by, created_at FROM users ORDER BY id"
+        "SELECT id, username, role, created_by, created_at, can_read, can_write"
+        " FROM users ORDER BY id"
     ).fetchall()
     conn.close()
-    _log(f"查询账号列表，共 {len(rows)} 个账号", op=admin["username"],
-         op_type="QUERY", table=TABLE, result_count=len(rows))
-    return [dict(r) for r in rows]
+
+    users = []
+    for r in rows:
+        item = dict(r)
+        # 管理员账号权限固定，不展示可编辑的值
+        if item["role"] == "admin":
+            item["can_read"] = 1
+            item["can_write"] = 1
+        item["can_read"] = bool(item["can_read"])
+        item["can_write"] = bool(item["can_write"])
+        item["permission"] = permission_label(item["can_read"], item["can_write"])
+        item["permission_editable"] = item["role"] != "admin"
+        users.append(item)
+
+    _log(f"查询账号列表，共 {len(users)} 个账号", op=admin["username"],
+         op_type="QUERY", table=TABLE, result_count=len(users))
+    return users
 
 
 @auth_router.post("/users")
@@ -353,6 +455,9 @@ def create_user(body: CreateUserBody, admin: dict = Depends(require_admin)):
     if not body.password:
         raise HTTPException(status_code=400, detail="密码不能为空")
 
+    # 默认「可读不可写」，管理员可在创建时直接指定可读可写 / 不可读不可写
+    can_read, can_write = normalize_permission(body.can_read, body.can_write)
+
     conn = get_conn()
     exists = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
     if exists:
@@ -361,18 +466,96 @@ def create_user(body: CreateUserBody, admin: dict = Depends(require_admin)):
 
     salt, pwd_hash = hash_password(body.password)
     cur = conn.execute(
-        "INSERT INTO users (username, password_hash, role, created_by, created_at)"
-        " VALUES (?, ?, 'user', ?, ?)",
-        (username, f"{salt}${pwd_hash}", admin["username"], _now_str()),
+        "INSERT INTO users (username, password_hash, role, created_by, created_at, can_read, can_write)"
+        " VALUES (?, ?, 'user', ?, ?, ?, ?)",
+        (username, f"{salt}${pwd_hash}", admin["username"], _now_str(),
+         int(can_read), int(can_write)),
     )
     new_id = cur.lastrowid
     conn.commit()
     conn.close()
     # 日志只记录账号名与角色，绝不记录任何形式的密码（含明文与哈希）
-    _log(f"新增账号「{username}」，角色=user，创建者={admin['username']}",
+    _log(f"新增账号「{username}」，角色=user，权限={permission_label(can_read, can_write)}，"
+         f"创建者={admin['username']}",
          op=admin["username"], op_type="CREATE", table=TABLE,
-         target_user=username, target_user_id=new_id, role="user")
-    return {"status": "success", "username": username}
+         target_user=username, target_user_id=new_id, role="user",
+         can_read=can_read, can_write=can_write)
+    return {"status": "success", "username": username,
+            "can_read": can_read, "can_write": can_write,
+            "permission": permission_label(can_read, can_write)}
+
+
+@auth_router.put("/users/{user_id}/permission")
+def update_user_permission(
+    user_id: int,
+    body: UpdatePermissionBody,
+    admin: dict = Depends(require_admin),
+):
+    """管理员调整账号权限：可读可写 / 可读不可写 / 不可读不可写
+
+    管理员账号本身默认可读可写，权限不可被变更（含不可被其它管理员变更）。
+    """
+    conn = get_conn()
+    target = conn.execute(
+        "SELECT id, username, role, can_read, can_write FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+
+    if target is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="账号不存在")
+
+    # 管理员账号权限锁定：不可降级、不可变更
+    if target["role"] == "admin":
+        conn.close()
+        _log(f"拒绝变更管理员账号「{target['username']}」的权限：管理员权限不可变更",
+             op=admin["username"], op_type="PERMISSION", table=TABLE,
+             result="denied", status_code=400,
+             target_user=target["username"], target_user_id=user_id, target_role="admin")
+        raise HTTPException(
+            status_code=400,
+            detail="管理员账号默认可读可写，其权限不可被变更",
+        )
+
+    can_read, can_write = normalize_permission(body.can_read, body.can_write)
+    old_read, old_write = bool(target["can_read"]), bool(target["can_write"])
+
+    if (old_read, old_write) == (can_read, can_write):
+        conn.close()
+        _log(f"调整账号「{target['username']}」权限：目标权限与当前一致（"
+             f"{permission_label(can_read, can_write)}），未产生变更",
+             op=admin["username"], op_type="PERMISSION", table=TABLE,
+             result="no_changes", target_user=target["username"], target_user_id=user_id)
+        return {
+            "status": "no_changes",
+            "user_id": user_id,
+            "username": target["username"],
+            "can_read": can_read,
+            "can_write": can_write,
+            "permission": permission_label(can_read, can_write),
+        }
+
+    conn.execute(
+        "UPDATE users SET can_read = ?, can_write = ? WHERE id = ?",
+        (int(can_read), int(can_write), user_id),
+    )
+    conn.commit()
+    conn.close()
+
+    _log(f"调整账号「{target['username']}」权限："
+         f"{permission_label(old_read, old_write)} -> {permission_label(can_read, can_write)}",
+         op=admin["username"], op_type="PERMISSION", table=TABLE,
+         target_user=target["username"], target_user_id=user_id,
+         before={"can_read": old_read, "can_write": old_write},
+         after={"can_read": can_read, "can_write": can_write})
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "username": target["username"],
+        "can_read": can_read,
+        "can_write": can_write,
+        "permission": permission_label(can_read, can_write),
+    }
 
 
 @auth_router.delete("/users/{user_id}")

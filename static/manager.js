@@ -100,6 +100,54 @@ function toggleSort() {
 }
 
 // 核心数据拉取、筛选与实时动态汇总
+// ===== 数据权限控制（可读可写 / 只读 / 不可读不可写） =====
+// admin 恒为可读可写；普通账号由后端 /api/auth/me 返回 can_read / can_write
+window.BILL_CAN_WRITE = true;
+window.BILL_CURRENT_USER = null;
+
+function ensureWritable() {
+    if (window.BILL_CAN_WRITE) return true;
+    alert('当前账号为只读权限，不能新增 / 修改 / 删除账单数据。如需写入权限，请联系管理员开通。');
+    return false;
+}
+
+async function initPermission() {
+    try {
+        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (res.ok) {
+            const me = await res.json();
+            window.BILL_CURRENT_USER = me;
+            window.BILL_CAN_WRITE = me.role === 'admin' || me.can_write === true;
+        }
+    } catch (e) { /* 网络异常时保持默认可写，后端 403 兜底 */ }
+    applyPermissionUI();
+}
+
+function applyPermissionUI() {
+    const canWrite = window.BILL_CAN_WRITE;
+    document.body.classList.toggle('read-only-mode', !canWrite);
+
+    const entryCard = document.getElementById('entry-form-card');
+    if (entryCard) entryCard.style.display = canWrite ? '' : 'none';
+
+    const banner = document.getElementById('readonly-banner');
+    if (banner) banner.style.display = canWrite ? 'none' : 'flex';
+
+    if (!canWrite) {
+        // 移除表格中的行内编辑与删除入口，避免误点
+        document.querySelectorAll('#table-body .editable-cell').forEach(el => {
+            el.removeAttribute('onclick');
+            el.removeAttribute('title');
+            el.classList.add('readonly-cell');
+        });
+        document.querySelectorAll('#table-body .btn-action-del').forEach(btn => {
+            const td = btn.closest('td');
+            if (td) td.remove();
+        });
+        document.querySelectorAll('.col-action').forEach(el => { el.style.display = 'none'; });
+    }
+}
+
 async function loadData() {
     const start = document.getElementById('filter-start').value;
     const end = document.getElementById('filter-end').value;
@@ -239,6 +287,9 @@ async function loadData() {
                 </tr>
             `;
         }).join('');
+
+        // 只读账号：渲染后立即移除行内编辑 / 删除入口
+        if (!window.BILL_CAN_WRITE) applyPermissionUI();
     } catch (err) {
         console.error("加载数据失败:", err);
     }
@@ -305,6 +356,7 @@ function applyUrlFilterParams() {
 
 // 行内直接修改
 function inlineEdit(cell, id) {
+    if (!ensureWritable()) return;
     if (!id || id === 'null' || id === 'undefined') {
         alert("无效数据ID，请刷新页面后重试");
         return;
@@ -350,6 +402,7 @@ function inlineEdit(cell, id) {
 
 // 交易类型下拉修改
 function inlineEditType(cell, id) {
+    if (!ensureWritable()) return;
     if (!id || id === 'null') return;
     if (cell.querySelector('select')) return;
 
@@ -391,6 +444,7 @@ function inlineEditType(cell, id) {
 // 提交新增表单
 document.getElementById('expense-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!ensureWritable()) return;
     const rawAcc = document.getElementById('pay_acc').value;
 
     const payload = {
@@ -423,6 +477,7 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
 
 // 删除条目
 async function deleteItem(id) {
+    if (!ensureWritable()) return;
     if (!id || id === 'null') {
         alert("无效数据ID");
         return;
@@ -564,7 +619,10 @@ async function exportToExcel() {
 // 初始化默认今日日期
 document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // 0. 先取当前账号权限，决定是否展示录入 / 编辑入口
+    await initPermission();
+
     // 1. 读取 URL 传递过来的跳转参数并回填到界面筛选框
     const hasFilter = applyUrlFilterParams();
 

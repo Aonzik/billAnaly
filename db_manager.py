@@ -7,11 +7,12 @@ import urllib.parse
 import pandas as pd
 from fastapi.responses import StreamingResponse
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import pandas as pd
 from pydantic import BaseModel
 
 import logger as oplog
+from auth import require_write
 
 db_router = APIRouter(prefix="/api/db", tags=["Database GUI API"])
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bills.db")
@@ -191,7 +192,8 @@ def list_expenses(
 
 
 @db_router.post("/expenses")
-def add_expense(item: ExpenseItem):
+def add_expense(item: ExpenseItem, user: dict = Depends(require_write)):
+    """新增账单：需要「可写」权限，只读账号将被拒绝"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -227,7 +229,8 @@ def add_expense(item: ExpenseItem):
 
 
 @db_router.put("/expenses/{item_id}")
-def update_expense(item_id: int, item: ExpenseUpdateItem):
+def update_expense(item_id: int, item: ExpenseUpdateItem, user: dict = Depends(require_write)):
+    """修改账单：需要「可写」权限，只读账号将被拒绝"""
     conn = get_db()
     cursor = conn.cursor()
 
@@ -275,7 +278,8 @@ def update_expense(item_id: int, item: ExpenseUpdateItem):
 
 
 @db_router.delete("/expenses/{item_id}")
-def delete_expense(item_id: int):
+def delete_expense(item_id: int, user: dict = Depends(require_write)):
+    """删除账单：需要「可写」权限，只读账号将被拒绝"""
     conn = get_db()
     cursor = conn.cursor()
 
