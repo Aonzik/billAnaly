@@ -92,6 +92,52 @@ def build_month_json_path(base_path, year, month):
     name = f"expense_data_{int(year)}-{int(month):02d}.json"
     return os.path.join(directory, name) if directory else name
 
+
+def fill_missing_dates(dates, year=None, month=None, record_dates=None):
+    """补齐逐日日期轴：没有消费记录的日子也要占一格（金额按 0 计），
+    否则图表会直接跳过该日。指定 year/month 时从当月 1 号补起，全量模式从首条记录补起；
+    终点取最后一条流水（含收入/房租等未进逐日净支出的记录），保证末尾的日子不被吞掉。
+    无法解析日期时原样返回，避免破坏原有数据。"""
+    if not dates:
+        return dates
+
+    import datetime
+
+    def to_date(text):
+        m = re.search(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$", str(text).strip())
+        if not m:
+            return None
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+
+    first_day = to_date(dates[0])
+    last_day = to_date(dates[-1])
+    for text in record_dates or ():
+        record_day = to_date(text)
+        if record_day is not None and (last_day is None or record_day > last_day):
+            last_day = record_day
+    if first_day is None or last_day is None:
+        return dates
+
+    start_day = first_day
+    if year is not None and month is not None:
+        try:
+            month_start = datetime.date(int(year), int(month), 1)
+            start_day = month_start if month_start <= first_day else first_day
+        except ValueError:
+            start_day = first_day
+    if start_day > last_day:
+        return dates
+
+    filled = []
+    cur = start_day
+    while cur <= last_day:
+        filled.append(cur.strftime("%Y-%m-%d"))
+        cur += datetime.timedelta(days=1)
+    return filled
+
 # =========================================================================
 # 词云清洗规则与统计引擎
 # =========================================================================
@@ -353,6 +399,9 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
 
     # 按照严格财务对冲公式：EX + AR - AP
     all_dates = sorted(set(daily_ex) | set(daily_ar) | set(daily_ap))
+    all_dates = fill_missing_dates(
+        all_dates, year=year, month=month, record_dates=[r["日期"] for r in recs]
+    )   # 没有消费的日期也保留为 0，避免图表把该日整列跳过
     daily_net = [(d, daily_ex[d] + daily_ar[d] - daily_ap[d]) for d in all_dates]
 
     # 逐日房租：仅供前端"累计消费进度"曲线使用（含房租口径），
