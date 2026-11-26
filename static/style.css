@@ -297,6 +297,43 @@ input.error, select.error {
 }
 
 /* ── Chart Cards ── */
+.transaction-charts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.transaction-charts .transaction-chart-card {
+    display: flex;
+    flex-direction: column;
+    height: 650px;
+    min-width: 0;
+}
+.transaction-chart-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 30px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+.transaction-chart { flex: 1; min-height: 0; width: 100%; }
+.transaction-chart-note {
+    min-height: 32px;
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--color-text-tertiary);
+}
+.transaction-chart-controls input:focus-visible + .wc-slider {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+@media (max-width: 992px) {
+    .transaction-charts { grid-template-columns: 1fr; }
+}
+
 .chart-container {
     display: grid;
     grid-template-columns: 1.3fr 1fr;

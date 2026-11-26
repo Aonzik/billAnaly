@@ -118,7 +118,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             return response.json();
         })
-        .then(data => {
+        .then(async data => {
+            // 兼容升级前的汇总缓存：首次访问自动补齐逐笔数据。
+            if (!Array.isArray(data.expense_transactions)) {
+                const params = new URLSearchParams({ monthly_budget: getCurrentBudget() });
+                if (savedYm) params.set('year_month', savedYm);
+                try {
+                    const refresh = await fetch(`/api/refresh_analysis?${params}`, { method: 'POST' });
+                    if (refresh.ok) {
+                        const updated = await fetch(dataFile, { cache: 'no-store' });
+                        if (updated.ok) data = await updated.json();
+                    }
+                } catch (error) { console.warn('逐笔消费缓存更新失败:', error); }
+            }
             // 提取所有分类并建立固定的映射表
             const categories = data.daily_trend ? data.daily_trend.categories : [];
             const colorMap = buildCategoryColorMap(categories);
@@ -129,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderDonutChart(data, colorMap);
             renderLatteFactor(data);   // 新增：渲染拿铁因子明细
             renderMerchantRank(data);   // 新增：渲染商户复购榜
+            renderTransactionCharts(data, colorMap);
             renderWordCloud(data);     // 新增：渲染全景词云
         })
         .catch(err => {
@@ -136,6 +149,141 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.innerHTML += `<p style="color:red;padding:20px;">数据加载失败: ${err.message}</p>`;
         });
 });
+
+// 两张逐笔图共用稳定的日期内抖动；切换刻度、主题时点的位置不变。
+function prepareTransactionPoints(rows) {
+    return (rows || []).flatMap((row, index) => {
+        const match = String(row.date || '').match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+        const amount = Number(row.amount);
+        if (!match || !Number.isFinite(amount)) return [];
+        const [, year, month, day] = match.map(Number);
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return [];
+        let hash = 2166136261;
+        const key = `${row.date}|${row.time}|${row.name}|${amount}|${index}`;
+        for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
+        const jitter = ((hash >>> 0) / 4294967296 - 0.5) * 0.56;
+        // 历史导入使用 HHmm（如 0517），管理页也允许 H:mm / HH:mm:ss。
+        const rawTime = String(row.time ?? '').trim();
+        const normalizedTime = /^\d{3,4}$/.test(rawTime)
+            ? rawTime.padStart(4, '0').replace(/^(\d{2})(\d{2})$/, '$1:$2')
+            : /^\d{6}$/.test(rawTime)
+                ? rawTime.replace(/^(\d{2})(\d{2})(\d{2})$/, '$1:$2:$3') : rawTime;
+        const time = normalizedTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+        const hour = time && +time[1] < 24 && +time[2] < 60 && +(time[3] || 0) < 60
+            ? +time[1] + +time[2] / 60 + +(time[3] || 0) / 3600 : null;
+        return [{ ...row, time: hour === null ? rawTime : normalizedTime, amount, category: row.category || '未分类', hour,
+            day: date.getTime(), x: date.getTime() + (0.5 + jitter) * 86400000 }];
+    });
+}
+
+function transactionZoomOptions(enabled, start = 65, end = 100) {
+    return [
+        { type: 'inside', xAxisIndex: 0, disabled: !enabled,
+            start: enabled ? start : 0, end: enabled ? end : 100,
+            zoomOnMouseWheel: enabled, moveOnMouseMove: enabled, moveOnMouseWheel: enabled },
+        { type: 'slider', xAxisIndex: 0, show: enabled,
+            start: enabled ? start : 0, end: enabled ? end : 100,
+            bottom: 0, height: 18, showDetail: false, borderColor: 'transparent' }
+    ];
+}
+
+function setTransactionFocus(id, enabled) {
+    const chart = echarts.getInstanceByDom(document.getElementById(id));
+    if (chart) chart.setOption({ dataZoom: transactionZoomOptions(enabled) });
+}
+
+function renderTransactionCharts(data, colorMap = {}) {
+    if (!data) return;
+    const points = prepareTransactionPoints(data.expense_transactions);
+    const categories = [...new Set(points.map(p => p.category))].sort();
+    const colors = { ...buildCategoryColorMap(categories), ...colorMap };
+    const log = document.getElementById('transaction-log-toggle').checked;
+    const amountPoints = points.filter(p => !log || p.amount > 0);
+    const rhythmPoints = points.filter(p => p.hour !== null && p.amount > 0);
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const text = dark ? '#CBD5E1' : '#475569';
+    const gridColor = dark ? '#374151' : '#E2E8F0';
+    const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // 与每日支出图共用账期日期，包含末尾只有收入、垫付等记录的日期。
+    const trendDays = prepareTransactionPoints((data.daily_trend?.dates || []).map(date => ({ date, amount: 0 }))).map(p => p.day);
+    const days = [...trendDays, ...points.map(p => p.day)];
+    const firstDay = days.length ? Math.min(...days) : Date.now();
+    const lastDay = days.length ? Math.max(...days) : firstDay;
+    const monthStart = new Date(firstDay);
+    if (!trendDays.length) monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(lastDay);
+    // 保留最后一天的全部抖动点，同时不露出次日日期。
+    rangeEnd.setHours(23, 59, 59, 999);
+    const maxAmount = Math.max(1, ...rhythmPoints.map(p => p.amount));
+    const positive = amountPoints.filter(p => p.amount > 0).map(p => p.amount);
+    const logMin = positive.length ? Math.pow(10, Math.floor(Math.log10(Math.min(...positive)))) : 0.1;
+    const logMax = positive.length ? Math.max(logMin * 10, Math.pow(10, Math.ceil(Math.log10(Math.max(...positive))))) : 10;
+
+    [['transactionAmountChart', amountPoints, false], ['transactionRhythmChart', rhythmPoints, true]].forEach(([id, visible, rhythm]) => {
+        const element = document.getElementById(id);
+        if (!element) return;
+        let chart = echarts.getInstanceByDom(element);
+        if (!chart) {
+            chart = echarts.init(element);
+            if (typeof ResizeObserver !== 'undefined') {
+                const observer = new ResizeObserver(() => chart.resize());
+                observer.observe(element);
+            } else window.addEventListener('resize', () => chart.resize());
+        }
+        const focused = document.getElementById(rhythm ? 'transaction-rhythm-focus' : 'transaction-amount-focus')?.checked || false;
+        const previousZoom = chart.getOption()?.dataZoom?.find(zoom => zoom.type === 'slider' && zoom.show);
+        chart.setOption({
+            animationDuration: 250,
+            textStyle: { color: text },
+            legend: { type: 'scroll', top: 6, textStyle: { color: text }, data: categories },
+            grid: { left: 12, right: 20, top: 65, bottom: 50, containLabel: true },
+            tooltip: {
+                trigger: 'item', confine: true,
+                backgroundColor: dark ? '#111827' : '#FFFFFF', borderColor: gridColor,
+                textStyle: { color: text },
+                formatter: params => {
+                    const p = params.data.transaction;
+                    return `${escape(p.date)} ${escape(p.time || '时间未知')}<br>${escape(p.category)} · ${escape(p.name || '未填写品名')}<br><b>¥${p.amount.toFixed(2)}</b>`;
+                }
+            },
+            xAxis: {
+                type: 'time', min: monthStart.getTime(), max: rangeEnd.getTime(),
+                minInterval: 86400000, maxInterval: 86400000,
+                splitNumber: Math.max(1, Math.ceil((rangeEnd - monthStart) / 86400000)),
+                axisLabel: { color: text, hideOverlap: false, showMaxLabel: false, rotate: 60, fontSize: 10, formatter: value => {
+                    const d = new Date(value);
+                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                } },
+                axisLine: { lineStyle: { color: gridColor } }, splitLine: { show: false }
+            },
+            yAxis: {
+                type: !rhythm && log ? 'log' : 'value',
+                name: rhythm ? '消费时刻' : '单笔金额（元）', nameTextStyle: { color: text },
+                ...(rhythm ? { min: 0, max: 24, interval: 4 } : log ? { min: logMin, max: logMax, logBase: 10 } : { min: Math.min(0, ...amountPoints.map(p => p.amount)) }),
+                axisLabel: { color: text, formatter: value => rhythm ? `${String(value).padStart(2, '0')}:00` : `¥${value}` },
+                splitLine: { lineStyle: { color: gridColor, type: 'dashed' } }
+            },
+            dataZoom: transactionZoomOptions(focused, previousZoom?.start ?? 65, previousZoom?.end ?? 100),
+            graphic: visible.length ? [] : [{ type: 'text', left: 'center', top: 'middle', style: { text: !data.expense_transactions ? '请更新预算或切换账期以生成逐笔数据' : rhythm && points.some(p => p.amount > 0) ? '消费时间缺失或无效，暂无法展示节律' : '暂无可展示的消费记录', fill: text } }],
+            series: categories.map(category => ({
+                name: category, type: 'scatter',
+                data: visible.filter(p => p.category === category).map(p => ({ value: [p.x, rhythm ? p.hour : p.amount, p.amount], transaction: p })),
+                symbolSize: rhythm ? value => Math.max(5, 36 * Math.sqrt(value[2] / maxAmount)) : 9,
+                itemStyle: { color: colors[category], opacity: 0.72, borderColor: dark ? '#111827' : '#FFFFFF', borderWidth: 1 },
+                emphasis: { focus: 'series', itemStyle: { opacity: 1, borderWidth: 2 } }
+            }))
+        }, true);
+    });
+    const invalid = (data.expense_transactions || []).length - points.length;
+    document.getElementById('transaction-amount-note').textContent =
+        `共 ${amountPoints.length} 笔支出（含房租、意外支出）；悬停查看品名、时间与金额。` +
+        (log ? `对数轴仅展示正金额，排除 ${points.length - amountPoints.length} 笔非正金额。` : '') +
+        (invalid ? `另有 ${invalid} 笔日期或金额无效。` : '');
+    document.getElementById('transaction-rhythm-note').textContent =
+        `共 ${rhythmPoints.length} 笔；${points.filter(p => p.hour === null).length} 笔时间缺失或无效，${points.filter(p => p.hour !== null && p.amount <= 0).length} 笔非正金额未绘制。气泡直径 5–36 px，小额设最小尺寸。`;
+}
 
 // 1. 顶部指标卡片
 function renderKpiCards(data) {
@@ -1338,5 +1486,6 @@ window.addEventListener('themechange', () => {
         renderBarLineChart(window._lastExpenseData, window._lastColorMap);
         renderDonutChart(window._lastExpenseData, window._lastColorMap);
         renderWordCloud(window._lastExpenseData);
+        renderTransactionCharts(window._lastExpenseData, window._lastColorMap);
     }
 });

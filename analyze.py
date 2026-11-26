@@ -492,6 +492,13 @@ def process_expense_data(rows, monthly_budget=2300, current_day=None, year=None,
     all_categories = sorted({r["分类"] for r in regular_ex})
 
     data_bundle = {
+        # 保留每条支出记录（含房租、意外支出），供消费颗粒度图使用。
+        "expense_transactions": [
+            {"date": r["日期"], "time": r["时间"],
+             "category": r["分类"] or "未分类", "name": r["品名"],
+             "amount": r["实际金额"]}
+            for r in recs if r["交易类型"] == "EX"
+        ],
         "overview": {
             "monthly_total_expense": monthly_total_expense,
             "monthly_net_growth": monthly_net_growth,

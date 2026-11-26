@@ -165,6 +165,35 @@
         </div>
     </div>
 
+    <!-- 逐笔消费：金额分布 & 24 小时节律 -->
+    <div class="transaction-charts">
+        <section class="chart-card transaction-chart-card">
+            <div class="chart-card-title">🔎 单笔消费金额分布</div>
+            <div class="chart-card-subtitle">每个点是一笔支出 · 颜色区分分类 · 日期内轻微错开防重叠</div>
+            <div class="transaction-chart-controls">
+                <span>线性</span>
+                <label class="wc-switch">
+                    <input type="checkbox" id="transaction-log-toggle" aria-label="单笔金额使用对数坐标" onchange="renderTransactionCharts(window._lastExpenseData, window._lastColorMap)">
+                    <span class="wc-slider"></span>
+                </label>
+                <span>对数</span>
+                <label><input type="checkbox" id="transaction-amount-focus" onchange="setTransactionFocus('transactionAmountChart', this.checked)"> 聚焦模式</label>
+            </div>
+            <div id="transactionAmountChart" class="transaction-chart" role="img" aria-label="按日期和分类展示单笔消费金额"></div>
+            <p id="transaction-amount-note" class="transaction-chart-note" aria-live="polite"></p>
+        </section>
+        <section class="chart-card transaction-chart-card">
+            <div class="chart-card-title">🕒 24 小时消费节律</div>
+            <div class="chart-card-subtitle">每个气泡是一笔支出 · 颜色区分分类 · 气泡面积随金额增大</div>
+            <div class="transaction-chart-controls">
+                <label><input type="checkbox" id="transaction-rhythm-focus" onchange="setTransactionFocus('transactionRhythmChart', this.checked)"> 聚焦模式</label>
+                <span>观察深夜消费与下午高频小额支出</span>
+            </div>
+            <div id="transactionRhythmChart" class="transaction-chart" role="img" aria-label="按日期和消费时刻展示单笔消费气泡"></div>
+            <p id="transaction-rhythm-note" class="transaction-chart-note" aria-live="polite"></p>
+        </section>
+    </div>
+
     <!-- 消费品名全景词云 -->
     <div class="card" style="margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
