@@ -109,13 +109,14 @@
 
     <!-- 中间：核心可视化双图 -->
     <div class="chart-container">
-        <div class="chart-card">
+        <div class="chart-card daily-chart-card">
             <div class="chart-card-title">📊 每日支出构成 · 净支出走势</div>
-            <div class="chart-card-subtitle">堆叠柱图 × 净支出折线 × 累计消费进度</div>
-            <!-- 聚焦模式开关 -->
-            <div class="chart-floating-control">
-                <input type="checkbox" id="toggle-datazoom">
-                <label for="toggle-datazoom" id="toggle-datazoom-label">聚焦模式</label>
+            <div class="chart-card-subtitle" id="daily-chart-subtitle">堆叠柱图 × 净支出折线 × 累计消费进度</div>
+            <div class="daily-chart-controls">
+                <label><input type="checkbox" id="toggle-log-scale" aria-describedby="log-scale-note"> 对数刻度（左轴）</label>
+                <label><input type="checkbox" id="toggle-log-bars-over-one" disabled> 仅显示金额大于 1 元的子柱</label>
+                <label><input type="checkbox" id="toggle-datazoom"> <span id="toggle-datazoom-label">聚焦模式</span></label>
+                <span id="log-scale-note" hidden>小于 1 元按 1 绘制</span>
             </div>
             <div id="barLineChart" class="chart-inner"></div>
         </div>

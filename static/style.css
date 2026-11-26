@@ -338,6 +338,38 @@ input.error, select.error {
     min-height: 420px;
 }
 
+.daily-chart-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.daily-chart-card .chart-inner {
+    flex: 1;
+    min-height: 0;
+}
+
+.daily-chart-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.daily-chart-controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.daily-chart-controls input {
+    margin: 0;
+    accent-color: var(--color-primary);
+}
+
 .chart-floating-control {
     position: absolute;
     right: 14px;

@@ -201,6 +201,34 @@ function renderBarLineChart(data, colorMap) {
     const categories = data.daily_trend.categories;
     const pivot = data.daily_trend.pivot_data;
     const safeBaseline = data.budget.safe_daily_baseline;
+    const logCheckbox = document.getElementById('toggle-log-scale');
+    const barsOverOneCheckbox = document.getElementById('toggle-log-bars-over-one');
+    const logNote = document.getElementById('log-scale-note');
+    const useLogScale = () => !!(logCheckbox && logCheckbox.checked);
+    // 只对绘图坐标设置下限；提示框、合计及右轴仍使用原始金额。
+    function displayAmount(value) {
+        if (value == null || value === '' || !Number.isFinite(Number(value))) return null;
+        return useLogScale() ? Math.max(1, Number(value)) : value;
+    }
+    const amountData = values => (values || []).map(displayAmount);
+    const barAmountData = values => (values || []).map(value =>
+        useLogScale() && barsOverOneCheckbox && barsOverOneCheckbox.checked
+            && !(Number(value) > 1) ? null : displayAmount(value));
+    const barScaleConfig = () => ({
+        // 对数不满足加法关系，改用并列柱避免分段高度误导。
+        stack: useLogScale() ? '' : '支出构成',
+        barMinHeight: useLogScale() ? 2 : 0
+    });
+    function amountAxisConfig() {
+        return {
+            type: useLogScale() ? 'log' : 'value',
+            logBase: 10,
+            name: useLogScale() ? '金额 (元·对数)' : '金额 (元)',
+            min: useLogScale() ? 1 : null,
+            max: useLogScale() ? extent => Math.pow(10,
+                Math.ceil(Math.log10(Math.max(10, extent.max || 1)))) : null
+        };
+    }
 
     // ---------------- 累计消费进度（背景曲线，含房租口径） ----------------
     const CUM_SERIES_NAME = '累计消费进度';
@@ -287,27 +315,31 @@ function renderBarLineChart(data, colorMap) {
     const seriesList = categories.map(cat => ({
         name: cat,
         type: 'bar',
-        stack: '支出构成',
+        ...barScaleConfig(),
         emphasis: { focus: 'series' },
         itemStyle: {
             color: colorMap[cat] || '#94a3b8'  // 使用统一色彩
         },
-        data: pivot[cat]
+        data: barAmountData(pivot[cat])
     }));
 
+    const baselineMarkData = [{
+        yAxis: safeBaseline,
+        name: '建议日均线',
+        lineStyle: { color: '#10B981', type: 'dashed', width: 2 },
+        label: { formatter: '安全基准: ¥' + safeBaseline.toFixed(1) }
+    }];
+    const displayedBaseline = () => baselineMarkData.map(item => ({
+        ...item, yAxis: displayAmount(item.yAxis)
+    }));
     seriesList.push({
         name: '每日净支出走势',
         type: 'line',
-        data: data.daily_trend.net_expenses,
+        data: amountData(data.daily_trend.net_expenses),
         lineStyle: { color: '#EF4444', width: 3 },
         itemStyle: { color: '#EF4444' },
         markLine: {
-            data: [{
-                yAxis: safeBaseline,
-                name: '建议日均线',
-                lineStyle: { color: '#10B981', type: 'dashed', width: 2 },
-                label: { formatter: '安全基准: ¥' + safeBaseline.toFixed(1) }
-            }]
+            data: displayedBaseline()
         }
     });
 
@@ -438,8 +470,7 @@ function renderBarLineChart(data, colorMap) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const yAxisList = [{
         // 左轴：保持自适应，只服务堆叠柱与每日净支出线的金额刻度
-        type: 'value',
-        name: '金额 (元)',
+        ...amountAxisConfig(),
         nameGap: 14,
         nameTextStyle: {
             align: 'center',
@@ -505,7 +536,10 @@ function renderBarLineChart(data, colorMap) {
                 let catSum = 0;
                 rows.forEach(p => {
                     const v = p.value;
-                    const raw = (v && typeof v === 'object') ? v.value : v;
+                    const raw = p.seriesName === CUM_SERIES_NAME
+                        ? ((v && typeof v === 'object') ? v.value : v)
+                        : p.seriesName === LEGEND_TOTAL_NAME
+                            ? netExpenses[p.dataIndex] : (pivot[p.seriesName] || [])[p.dataIndex];
                     if (raw == null || raw === '') return;
                     const marker = p.marker || '';
                     if (p.seriesName === CUM_SERIES_NAME) {
@@ -592,6 +626,35 @@ function renderBarLineChart(data, colorMap) {
     });
 
     syncZoomState();
+
+    function syncAmountScale() {
+        if (logNote) logNote.hidden = !useLogScale();
+        if (barsOverOneCheckbox) barsOverOneCheckbox.disabled = !useLogScale();
+        const subtitle = document.getElementById('daily-chart-subtitle');
+        if (subtitle) subtitle.textContent = useLogScale()
+            ? '并列柱图 × 净支出折线 × 累计消费进度'
+            : '堆叠柱图 × 净支出折线 × 累计消费进度';
+        chart.setOption({
+            // 仅更新左轴；右轴的类型、范围和累计数据均不参与切换。
+            yAxis: [amountAxisConfig()],
+            series: [
+                ...categories.map(cat => ({
+                    name: cat, ...barScaleConfig(), data: barAmountData(pivot[cat])
+                })),
+                {
+                    name: LEGEND_TOTAL_NAME,
+                    data: amountData(netExpenses),
+                    markLine: {
+                        data: displayedBaseline()
+                    }
+                }
+            ]
+        });
+        chart.resize();
+    }
+    syncAmountScale();
+    if (logCheckbox) logCheckbox.onchange = syncAmountScale;
+    if (barsOverOneCheckbox) barsOverOneCheckbox.onchange = syncAmountScale;
 
     if (checkboxElem) {
         checkboxElem.addEventListener('change', syncZoomState);
